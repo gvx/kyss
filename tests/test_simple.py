@@ -40,3 +40,8 @@ def test_deeply_nested_sequence():
 
 def test_map_in_sequence():
     assert kyss.parse_string('- key: value\n  k2: v2') == [{'key': 'value', 'k2': 'v2'}]
+
+def test_comments_in_map():
+    assert kyss.parse_string(r'''outer: # comment
+    inner: okay
+''') == {'outer': {'inner': 'okay'}}

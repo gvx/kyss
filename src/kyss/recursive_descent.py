@@ -80,7 +80,9 @@ class Source:
             line_start = self.string.rfind('\n', 0, self.index) + 1
         else:
             line_start = 0
-        line_end: int = self.string.index('\n', self.index)
+        line_end: int | None = self.string.find('\n', self.index)
+        if line_end == -1:
+            line_end = None
         column_nr = self.index - line_start
         return line_nr + 1, column_nr, self.string[line_start:line_end]
 
@@ -142,7 +144,7 @@ def expect_indentation(s: Source) -> tuple[None, Source]:
         return None, snew
     fail(s, 'more indentation')
 
-plain_re = re.compile(r'(?!-[ \t]|[\'" \t])(:[^ \t\n]|[^ \t\n]#|[^:#\n])*')
+plain_re = re.compile(r'(?!-[ \t]|[\'" \t])(:[^ \t\n]|[^ \t\n]#|[^:#\n])+')
 def expect_plain_scalar(s: Source) -> tuple[str, Source]:
     # Can't use expect_regex_factory here, because rstrip is needed
     match, s = s.match(plain_re, 'plain scalar')
@@ -251,7 +253,7 @@ def expect_complex_mapping_value(s: Source) -> tuple[Any, Source]:
     return value, s.dedent()
 
 def expect_mapping_value(s: Source) -> tuple[Any, Source]:
-    return first_valid(s, [expect_scalar_mapping_value, expect_complex_mapping_value])
+    return first_valid(s, [expect_complex_mapping_value, expect_scalar_mapping_value])
 
 def expect_mapping_item(s: Source) -> tuple[tuple[str, Any], Source]:
     key, s = expect_scalar(s)
