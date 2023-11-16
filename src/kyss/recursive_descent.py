@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from functools import partial
 from os import PathLike
 from pathlib import Path
-from typing import Any, Callable, Protocol, Self, TypeVar, overload, Literal
+from typing import Any, Callable, Protocol, Self, TypeVar, overload, Literal, Never
 
 from .schema import Schema
 from .typed_schema import to_schema
@@ -13,18 +13,22 @@ from .typed_schema import to_schema
 @dataclass
 class ParsingFailure(Exception):
     source: 'Source'
-    expected: Any
+    expected: dict[str, None]
 
     def format_expected(self) -> str:
-        if isinstance(self.expected, list):
-            expected = ', '.join(str(e) for e in self.expected)
+        expected = ', '.join(self.expected)
+        if len(self.expected) > 1:
             return f'one of {{{expected}}}'
-        return str(self.expected)
+        return expected
 
     def __str__(self) -> str:
         line_nr, col, line = self.source.get_line_info()
         spaces = ' ' * (col - 1)
         return f'Expected {self.format_expected()}\nLine: {line_nr}\n{line}\n{spaces}^'
+
+
+def ordered_set(value: str) -> dict[str, None]:
+    return {value: None}
 
 _PENDING = object()
 
@@ -42,13 +46,13 @@ class Source:
 
     def expect(self, expected: str) -> Self:
         if not self.string.startswith(expected, self.index):
-            raise ParsingFailure(self, repr(expected))
+            fail(self, repr(expected))
         return self.advance(len(expected))
 
     def match(self, regex: re.Pattern[str], expected: str | None = None) -> tuple[re.Match[str], Self]:
         match_value = regex.match(self.string, self.index)
         if match_value is None:
-            raise ParsingFailure(self, expected or str(regex))
+            fail(self, expected or str(regex))
         return match_value, self.advance_to(match_value.end())
 
     def check(self, expected: str) -> bool:
@@ -67,7 +71,7 @@ class Source:
 
     def fix_indentation(self, new_indentation: str) -> Self:
         if not new_indentation.startswith(self.indentation[-2]):
-            raise ParsingFailure(self, 'inconsistent indentation')
+            fail(self, 'inconsistent indentation')
         return replace(self, indentation=self.indentation[:-1] + (new_indentation,))
 
     def get_line_info(self) -> tuple[int, int, str]:
@@ -76,31 +80,21 @@ class Source:
             line_start = self.string.rfind('\n', 0, self.index) + 1
         else:
             line_start = 0
-        line_end: int | None = self.string.find('\n', self.index)
-        if line_end == -1:
-            line_end = None
+        line_end: int = self.string.index('\n', self.index)
         column_nr = self.index - line_start
         return line_nr + 1, column_nr, self.string[line_start:line_end]
 
 type Consumer[T] = Callable[[Source], tuple[T, Source]]
 
 def first_valid[T](source: Source, alternatives: list[Consumer[T]]) -> tuple[T, Source]:
-    exp = []
+    exp = {}
     for alternative in alternatives:
         try:
             return alternative(source)
         except ParsingFailure as e:
-            if isinstance(e.expected, list):
-                exp.extend(e.expected)
-            else:
-                exp.append(e.expected)
+            exp |= e.expected
     raise ParsingFailure(source, exp)
 
-def optional[T](source: Source, possible: Consumer[T]) -> tuple[T | None, Source]:
-    try:
-        return possible(source)
-    except ParsingFailure:
-        return None, source
 
 def n_or_more[T](source: Source, repeated: Consumer[T], minimum: int) -> tuple[list[T], Source]:
     parsed = []
@@ -111,37 +105,30 @@ def n_or_more[T](source: Source, repeated: Consumer[T], minimum: int) -> tuple[l
     except ParsingFailure as e:
         expected = e.format_expected()
     if len(parsed) < minimum:
-        raise ParsingFailure(source, f'At least {minimum} times {expected}')
+        fail(source, f'At least {minimum} times {expected}')
     return parsed, source
 
-def composed_parsers_select[T](parsers: list[Consumer[Any]], select: int, source: Source) -> tuple[T, Source]:
-    parsed_list, source = composed_parsers(parsers, source)
-    return parsed_list[select], source
 
-def composed_parsers[T](parsers: list[Consumer[T]], source: Source) -> tuple[list[T] | T, Source]:
-    parsed = []
-    for parser in parsers:
+def composed_parsers[T](parsers: list[Consumer[T]], select: int, source: Source) -> tuple[list[T] | T, Source]:
+    assert 0 <= select < len(parsers)
+    for i, parser in enumerate(parsers):
         parsed_item, source = parser(source)
-        parsed.append(parsed_item)
+        if i == select:
+            parsed = parsed_item
     return parsed, source
 
-@overload
-def compose[T](parsers: list[Consumer[T]], *, select: None = None) -> Consumer[list[T]]:
-    ...
 
-@overload
-def compose[T](parsers: list[Consumer[Any]], *, select: int) -> Consumer[T]:
-    ...
+def compose[T](parsers: list[Consumer[T | Any]], *, select: int) -> Consumer[T | list[T]]:
+    return partial(composed_parsers, parsers, select)
 
-def compose[T](parsers: list[Consumer[T | Any]], *, select: int | None = None) -> Consumer[T | list[T]]:
-    if select is not None:
-        return partial(composed_parsers_select, parsers, select)
-    return partial(composed_parsers, parsers)
 
-def expect_regex_factory(regex: str) -> Consumer[str]:
+def fail(s: Source, expectation: str) -> Never:
+    raise ParsingFailure(s, ordered_set(expectation))
+
+def expect_regex_factory(regex: str, expectation: str) -> Consumer[str]:
     c = re.compile(regex)
     def f(s: Source) -> tuple[str, Source]:
-        match, s = s.match(c)
+        match, s = s.match(c, expectation)
         return match.group(), s
     return f
 
@@ -153,21 +140,18 @@ def expect_indentation(s: Source) -> tuple[None, Source]:
         return None, snew.fix_indentation(indentation_found)
     if indentation_found == s.indentation[-1]:
         return None, snew
-    raise ParsingFailure(s, f'more indentation')
+    fail(s, 'more indentation')
 
 plain_re = re.compile(r'(?!-[ \t]|[\'" \t])(:[^ \t\n]|[^ \t\n]#|[^:#\n])*')
 def expect_plain_scalar(s: Source) -> tuple[str, Source]:
     # Can't use expect_regex_factory here, because rstrip is needed
-    try:
-        match, s = s.match(plain_re)
-    except ParsingFailure as e:
-        raise ParsingFailure(s, 'plain scalar') from None
+    match, s = s.match(plain_re, 'plain scalar')
     return match.group().rstrip(), s
 
 esc_seq_re = re.compile((r"\\(x[a-fA-F0-9]{2}|u[a-fA-F0-9]{4}|U[a-fA-F0-9]{8}|.)"))
 SIMPLE: dict[str, str] = {'n': '\n', 't': '\t', 'r': '\r'}
 def expect_escape_sequence(s: Source) -> tuple[str, Source]:
-    match, snew = s.match(esc_seq_re)
+    match, snew = s.match(esc_seq_re, 'escape sequence')
     escaped = match.group(1)
     selector = escaped[0]
     if selector in {'\\', '"', "'"}:
@@ -177,10 +161,10 @@ def expect_escape_sequence(s: Source) -> tuple[str, Source]:
     elif selector in {'x', 'u', 'U'}:
         value = chr(int(escaped[1:], 16))
     else:
-        raise ParsingFailure(s, 'valid escape sequence')
+        fail(s, 'valid escape sequence')
     return value, snew
 
-expect_double_quoted_contents = expect_regex_factory(r'[^"\n\\]+')
+expect_double_quoted_contents = expect_regex_factory(r'[^"\n\\]+', 'double quoted string contents')
 
 def expect_double_quoted_scalar(s: Source) -> tuple[str, Source]:
     s = s.expect('"')
@@ -191,7 +175,7 @@ def expect_double_quoted_scalar(s: Source) -> tuple[str, Source]:
         frags.append(frag)
     return ''.join(frags), s.expect('"')
 
-expect_single_quoted_contents = expect_regex_factory(r"[^'\n\\]+")
+expect_single_quoted_contents = expect_regex_factory(r"[^'\n\\]+", 'single quoted string contents')
 
 def expect_single_quoted_scalar(s: Source) -> tuple[str, Source]:
     s = s.expect("'")
@@ -234,15 +218,15 @@ def expect_sequence_item_sequence(s: Source, indentation: str) -> tuple[list[Any
     other_items, s = n_or_more(s, compose([expect_newline, expect_indentation, expect_sequence_item], select=2), 0)
     return [item] + other_items, s.dedent()
 
-def expect_sequence_item_mapping(s: Source) -> tuple[dict[str, Any], Source]:
+def expect_sequence_item_mapping(s: Source, indentation: str) -> tuple[dict[str, Any], Source]:
     other_items: list[tuple[str, Any]]
-    s = s.indent()
+    s = s.indent(indentation)
     (k1, v1), s = expect_mapping_item(s)
     other_items, s = n_or_more(s, compose([expect_newline, expect_indentation, expect_mapping_item], select=2), 0)
     return {k1: v1} | {k: v for k, v in other_items}, s.dedent()
 
 def expect_sequence_item_value(s: Source, indentation: str) -> tuple[Any, Source]:
-    return first_valid(s, [partial(expect_sequence_item_sequence, indentation=indentation), expect_sequence_item_mapping, expect_value_scalar])
+    return first_valid(s, [partial(expect_sequence_item_sequence, indentation=indentation), partial(expect_sequence_item_mapping, indentation=indentation), expect_value_scalar])
 
 def expect_sequence_item(s: Source) -> tuple[Any, Source]:
     s = s.expect('-')
@@ -295,7 +279,7 @@ def expect_document(s: Source) -> tuple[Any, Source]:
 def _parse(s: str) -> Any:
     value, src = expect_document(Source(s))
     if src.index < len(s):
-        raise ParsingFailure(src, 'end of document')
+        fail(src, 'end of document')
     return value
 
 def parse_string(s: str, /, schema: Schema | type | None = None) -> Any:

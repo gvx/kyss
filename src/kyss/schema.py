@@ -1,6 +1,6 @@
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from decimal import Decimal as PyDecimal
+from decimal import Decimal as PyDecimal, InvalidOperation
 from typing import (Any, NotRequired, Required, Self, get_args,
                     get_origin, is_typeddict)
 
@@ -95,7 +95,7 @@ class Decimal(Schema):
         if isinstance(v, str):
             try:
                 return PyDecimal(v)
-            except ValueError:
+            except InvalidOperation:
                 pass
         raise SchemaError('decimal number', v)
 
