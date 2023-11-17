@@ -34,6 +34,7 @@ path = "src/kyss/__about__.py"
 dependencies = [
   "coverage[toml]>=6.5",
   "pytest",
+  "sphinx",
 ]
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:tests}"
@@ -46,6 +47,7 @@ cov = [
   "test-cov",
   "cov-report",
 ]
+docs = "python -m sphinx build -M html docs/source docs/build"
 
 [[tool.hatch.envs.all.matrix]]
 python = ["3.12"]
