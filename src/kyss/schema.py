@@ -7,6 +7,7 @@ from typing import (Any, NotRequired, Required, Self, get_args,
 type RawParsed = str | dict[str, Any] | list[Any]  # Where issubclass(Any, RawParsed)
 
 class SchemaError(Exception):
+    '''Raised when a kyss value is able to be parsed but is not accepted by the given schema.'''
     def __init__(self, expected: str, found: RawParsed) -> None:
         self.expected = expected
         self.found = found
@@ -14,7 +15,12 @@ class SchemaError(Exception):
         return f'expected {self.expected}, found {self.found!r}'
 
 class Schema:
+    '''Base class for all schema builders. You can implement your own schema builder by subclassing ``Schema`` and overriding the ``parse`` method.'''
+
     def parse(self, v: RawParsed) -> Any:
+        '''Validates its argument. If the argument is accepted, returns either the argument unchanged or a value to replace it.
+        If the argument is not accepted, raises :py:class:`SchemaError`.'''
+
         raise NotImplementedError
 
     def __or__(self, other: 'Schema') -> 'Alternatives':
@@ -24,6 +30,7 @@ class Schema:
         yield self
 
     def wrap_in(self, fn: Callable[[Any], Any]) -> 'Wrapper':
+        '''Wrap a schema in a callable. For example: ``parse_string('6', Int().wrap_in(lambda x: x * 7)) == 42``'''
         return Wrapper(self, fn)
 
 @dataclass
@@ -36,6 +43,11 @@ class Wrapper(Schema):
 
 @dataclass
 class Alternatives(Schema):
+    '''``schema_1 | schema_2 | ... | schema_n`` <=> ``Alternatives([schema_1, schema_2, ..., schema_n])``
+
+    This tries to validate the parsed value with each schema given. The first schema that accepts the value is used.
+    Only fails if none of the alternatives accept it.'''
+
     alternatives: list[Schema]
 
     def parse(self, v: RawParsed) -> Any:
@@ -52,6 +64,8 @@ class Alternatives(Schema):
 
 @dataclass
 class Str(Schema):
+    'Accepts any scalar and produces it unchanged.'
+
     def parse(self, v: RawParsed) -> Any:
         if not isinstance(v, str):
             raise SchemaError('string', v)
@@ -59,6 +73,7 @@ class Str(Schema):
 
 @dataclass
 class Bool(Schema):
+    "Accepts scalars that case-insensitively equal to 'true' or 'false'. Produces a ``bool``."
     def parse(self, v: RawParsed) -> Any:
         if isinstance(v, str):
             v = v.lower()
@@ -70,6 +85,7 @@ class Bool(Schema):
 
 @dataclass
 class Int(Schema):
+    'Accepts scalars that Python can interpret as integers. Produces an ``int``.'
     def parse(self, v: RawParsed) -> Any:
         if isinstance(v, str):
             try:
@@ -80,6 +96,7 @@ class Int(Schema):
 
 @dataclass
 class Float(Schema):
+    'Accepts scalars that Python can interpret as floating point numbers. Produces a ``float``.'
     def parse(self, v: RawParsed) -> Any:
         if isinstance(v, str):
             try:
@@ -91,6 +108,7 @@ class Float(Schema):
 
 @dataclass
 class Decimal(Schema):
+    'Accepts scalars that Python can interpret as a decimal number. Produces a ``decimal.Decimal``.'
     def parse(self, v: RawParsed) -> Any:
         if isinstance(v, str):
             try:
@@ -101,6 +119,8 @@ class Decimal(Schema):
 
 @dataclass
 class Sequence(Schema):
+    'Accepts sequences where each item is accepted by the ``item`` schema. Produces a ``list``.'
+
     item: Schema
 
     def parse(self, v: RawParsed) -> Any:

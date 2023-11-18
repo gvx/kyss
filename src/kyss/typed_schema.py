@@ -24,6 +24,36 @@ def _mapping_specified(value_types: dict[str, type], keys: Iterable[str]) -> dic
     return {key: to_schema(value_types[key]) for key in keys if key != '_extra_'}
 
 def to_schema(type_schema: type | Schema) -> Schema:
+    '''Interpret a type as a schema. Called by :py:func:`parse_string` and :py:func:`parse_file`.
+
+    .. parsed-literal::
+
+        to_schema(str) -> Str()
+        to_schema(int) -> Int()
+        to_schema(bool) -> Bool()
+        to_schema(float) -> Float()
+        to_schema(decimal.Decimal) -> Decimal()
+        to_schema(list[*t*]) -> Sequence(to_schema(*t*))
+        to_schema(dict[str, *t*]) -> Mapping({}, to_schema(*t*))
+        to_schema(list_or_single[*t*]) -> SequenceOrSingle(to_schema(*t*))
+        to_schema(comma_separated[*t*]) -> CommaSeparated(to_schema(*t*))
+        to_schema(*t1* | *t2*) -> to_schema(*t1*) | to_schema(*t2*)
+
+        type spam = int
+        type ham[T] = list[T]
+
+        to_schema(spam) -> Int()
+        to_schema(ham[bool]) -> Sequence(Bool())
+
+        class Employee(typing.TypedDict):
+            id: int
+            department: typing.NotRequired[str]
+
+            _extra_: bool
+
+        to_schema(Employee) -> Mapping({'id': Int()}, Bool(), optional={'department': Str()})
+
+    '''
     if isinstance(type_schema, Schema):
         return type_schema
     if isinstance(type_schema, TypeAliasType):

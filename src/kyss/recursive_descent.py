@@ -12,6 +12,8 @@ from .typed_schema import to_schema
 
 @dataclass
 class ParsingFailure(Exception):
+    '''Raised when trying to parse an invalid kyss file or string.'''
+
     source: 'Source'
     expected: dict[str, None]
 
@@ -285,6 +287,10 @@ def _parse(s: str) -> Any:
     return value
 
 def parse_string(s: str, /, schema: Schema | type | None = None) -> Any:
+    '''Parse a kyss string. If a Schema or type schema is provided, it will be used to validate the parsed value
+
+    :param s: a str that contains the kyss-encoded value
+    :param schema: optional schema to use'''
     value = _parse(s + '\n')
     if schema is None:
         return value
@@ -292,4 +298,8 @@ def parse_string(s: str, /, schema: Schema | type | None = None) -> Any:
 
 
 def parse_file(f: PathLike[str], /, schema: Schema | type | None = None) -> Any:
+    '''Parse a kyss file (utf-8 encoded). If a Schema or type schema is provided, it will be used to validate the parsed value
+
+    :param f: a os.PathLike for the file name
+    :param schema: optional schema to use'''
     return parse_string(Path(f).read_text(encoding='utf-8'), schema)

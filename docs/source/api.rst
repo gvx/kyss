@@ -6,18 +6,50 @@ Basic API
 
 .. module:: kyss
 
-.. automodule:: kyss.recursive_descent
-   :members:
+.. autofunction:: parse_string
+
+.. autofunction:: parse_file
+
+.. autoclass:: kyss.ParsingFailure
 
 Schemas
 -------
 
-.. automodule:: kyss.schema
+.. autoclass:: kyss.Schema
    :members:
 
+.. autoclass:: kyss.SchemaError
+   :members:
+
+.. autoclass:: kyss.Alternatives
+
+.. autoclass:: kyss.Str
+
+.. autoclass:: kyss.Bool
+
+.. autoclass:: kyss.Int
+
+.. autoclass:: kyss.Float
+
+.. autoclass:: kyss.Decimal
+
+.. autoclass:: kyss.Sequence
+
+.. autoclass:: kyss.Mapping
+
+.. autoclass:: kyss.SequenceOrSingle
+
+.. autoclass:: kyss.CommaSeparated
 
 Typed schemas
 -------------
 
-.. automodule:: kyss.typed_schema
-   :members:
+.. autoclass:: comma_separated
+
+   Type version of :py:class:`CommaSeparated`.
+
+.. autoclass:: list_or_single
+
+   Type version of :py:class:`SequenceOrSingle`.
+
+.. autofunction:: to_schema
