@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from functools import partial
 from os import PathLike
 from pathlib import Path
-from typing import Any, Callable, Protocol, Self, TypeVar, overload, Literal, Never
+from typing import Any, Callable, Literal, Never, Self
 
 from .schema import Schema
 from .typed_schema import to_schema

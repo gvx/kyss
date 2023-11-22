@@ -1,10 +1,12 @@
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from decimal import Decimal as PyDecimal, InvalidOperation
-from typing import (Any, NotRequired, Required, Self, get_args,
-                    get_origin, is_typeddict)
+from decimal import Decimal as PyDecimal
+from decimal import InvalidOperation
+from typing import (Any, NotRequired, Required, Self, get_args, get_origin,
+                    is_typeddict)
 
-type RawParsed = str | dict[str, Any] | list[Any]  # Where issubclass(Any, RawParsed)
+#: Passed into :meth:`Schema.parse`
+type RawParsed = str | dict[str, RawParsed] | list[RawParsed]
 
 class SchemaError(Exception):
     '''Raised when a kyss value is able to be parsed but is not accepted by the given schema.'''
@@ -30,7 +32,14 @@ class Schema:
         yield self
 
     def wrap_in(self, fn: Callable[[Any], Any]) -> 'Wrapper':
-        '''Wrap a schema in a callable. For example: ``parse_string('6', Int().wrap_in(lambda x: x * 7)) == 42``'''
+        r'''Wrap a schema in a callable.
+
+        >>> parse_string('6', Int().wrap_in(lambda x: x * 7))
+        42
+        >>> parse_string('- one\n- seven\n- thirteen', Sequence(Str().wrap_in(len)))
+        [3, 5, 8]
+        '''
+
         return Wrapper(self, fn)
 
 @dataclass
@@ -130,6 +139,12 @@ class Sequence(Schema):
 
 @dataclass
 class Mapping(Schema):
+    '''Accepts mappings. Produces a ``dict``.
+
+    :param required: maps required keys to the schemas for their respective values.
+    :param values: the schema used for values whose keys are not specified in either required or optional. If ``None``, rejects mappings with unspecified keys.
+    :param optional: maps optional keys to the schemas for their respective values.'''
+
     required: dict[str, Schema]
     values: Schema | None = None
     optional: dict[str, Schema] | None = field(default=None, kw_only=True)
@@ -154,6 +169,10 @@ class Mapping(Schema):
 
 @dataclass
 class SequenceOrSingle(Schema):
+    '''Accepts either a sequence where each item is accepted by ``item`` or a non-sequence value that is accepted by ``item``. Always produces a ``list``, regardless.
+
+    :param item: the schema used for either the sequence items or the non-sequence value.'''
+
     item: Schema
 
     def parse(self, v: RawParsed) -> Any:
@@ -163,9 +182,21 @@ class SequenceOrSingle(Schema):
 
 @dataclass
 class CommaSeparated(Schema):
+    '''Accepts a scalar, splits it on commas. Produces a ``list``.
+
+    :param item: schema that should accept a scalar for the substrings.
+    '''
+
     item: Schema
 
     def parse(self, v: RawParsed) -> Any:
         if not isinstance(v, str):
             raise SchemaError('string', v)
         return [self.item.parse(item) for item in v.split(',')]
+
+@dataclass
+class Passthrough(Schema):
+    '''Accepts any value and produces it unchanged.'''
+
+    def parse(self, v: RawParsed) -> Any:
+        return v

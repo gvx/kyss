@@ -2,8 +2,8 @@ import sys
 from argparse import ArgumentParser, FileType
 from pathlib import Path
 
-from .recursive_descent import parse_file, parse_string
 from .__about__ import __version__
+from .recursive_descent import parse_file, parse_string
 
 
 def maybe_path(s: str) -> Path | None:

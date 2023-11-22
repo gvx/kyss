@@ -79,20 +79,22 @@ unescaped double quotes and vice versa. Quoted scalars can contain arbitrary str
 * Instances of the quote character used as a delimiter.
 * Literal backslashes.
 
-Plain scalars don't require delimiters, but they are more limited in what they can contain. Plain scalars **cannot** contain any newline (``'\n'``) or carriage return characters (``'\r'``).
+Plain scalars don't require delimiters, but they are more limited in what they can contain:
 
-Plain scalars **cannot** start with any of the following:
+* Plain scalars **cannot** contain any newline (``'\n'``) or carriage return characters (``'\r'``).
 
-* Whitespace.
-* A hyphen-minus (``'-'``) followed by whitespace.
-* A quote character (``'"'`` or ``"'"``).
+* Plain scalars **cannot** start with any of the following:
 
-Plain scalars can also **not** contain the following sequences of characters:
+    * Whitespace.
+    * A hyphen-minus (``'-'``) followed by whitespace.
+    * A quote character (``'"'`` or ``"'"``).
 
-* A colon (``':'``) followed by whitespace.
-* A hash or number sign (``'#'``) preceded by whitespace.
+* Plain scalars **cannot** contain the following sequences of characters:
 
-Plain scalars can end in whitespace, but it is stripped from the output.
+    * A colon (``':'``) followed by whitespace.
+    * A hash or number sign (``'#'``) preceded by whitespace.
+
+Plain scalars can **end** in whitespace, but it is stripped from the output.
 
 Escape sequences
 ^^^^^^^^^^^^^^^^

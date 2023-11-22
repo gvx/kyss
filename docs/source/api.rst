@@ -10,46 +10,53 @@ Basic API
 
 .. autofunction:: parse_file
 
-.. autoclass:: kyss.ParsingFailure
+.. autoclass:: ParsingFailure
 
 Schemas
 -------
 
-.. autoclass:: kyss.Schema
+.. data:: kyss.schema.RawParsed
+   :annotation: = str | dict[str, RawParsed] | list[RawParsed]
+
+   The type of values passed into :meth:`kyss.Schema.parse`.
+
+.. autoclass:: Schema
    :members:
 
-.. autoclass:: kyss.SchemaError
+.. autoclass:: SchemaError
    :members:
 
-.. autoclass:: kyss.Alternatives
+.. autoclass:: Alternatives
 
-.. autoclass:: kyss.Str
+.. autoclass:: Str
 
-.. autoclass:: kyss.Bool
+.. autoclass:: Bool
 
-.. autoclass:: kyss.Int
+.. autoclass:: Int
 
-.. autoclass:: kyss.Float
+.. autoclass:: Float
 
-.. autoclass:: kyss.Decimal
+.. autoclass:: Decimal
 
-.. autoclass:: kyss.Sequence
+.. autoclass:: Sequence
 
-.. autoclass:: kyss.Mapping
+.. autoclass:: Mapping
 
-.. autoclass:: kyss.SequenceOrSingle
+.. autoclass:: SequenceOrSingle
 
-.. autoclass:: kyss.CommaSeparated
+.. autoclass:: CommaSeparated
+
+.. autoclass:: Passthrough
 
 Typed schemas
 -------------
 
-.. autoclass:: comma_separated
+.. class:: comma_separated[T]
 
-   Type version of :py:class:`CommaSeparated`.
+   Type syntax version of :py:class:`CommaSeparated`.
 
-.. autoclass:: list_or_single
+.. class:: list_or_single[T]
 
-   Type version of :py:class:`SequenceOrSingle`.
+   Type syntax version of :py:class:`SequenceOrSingle`.
 
 .. autofunction:: to_schema

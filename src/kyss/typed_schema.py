@@ -2,13 +2,14 @@ from collections.abc import Iterable
 from decimal import Decimal as PyDecimal
 from inspect import get_annotations
 from types import UnionType
-from typing import (NotRequired, Required, TypeVar, get_args, get_origin,
-                    is_typeddict, TypeAliasType)
+from typing import (Any, NotRequired, Required, TypeAliasType, get_args,
+                    get_origin, is_typeddict)
 
 from .schema import (Alternatives, Bool, CommaSeparated, Decimal, Float, Int,
-                     Mapping, Schema, Sequence, SequenceOrSingle, Str)
+                     Mapping, Passthrough, Schema, Sequence, SequenceOrSingle,
+                     Str)
 
-TERMINAL_MAPPING: dict[type, Schema] = {bool: Bool(), str: Str(), int: Int(), float: Float(), PyDecimal: Decimal()}
+TERMINAL_MAPPING: dict[type, Schema] = {bool: Bool(), str: Str(), int: Int(), float: Float(), PyDecimal: Decimal(), Any: Passthrough()}
 
 # list[T] -> Sequence(to_schema(T))
 # dict[str, T] -> Mapping({}, to_schema(T))
@@ -24,34 +25,34 @@ def _mapping_specified(value_types: dict[str, type], keys: Iterable[str]) -> dic
     return {key: to_schema(value_types[key]) for key in keys if key != '_extra_'}
 
 def to_schema(type_schema: type | Schema) -> Schema:
-    '''Interpret a type as a schema. Called by :py:func:`parse_string` and :py:func:`parse_file`.
+    r'''Interpret a type as a schema. Called by :py:func:`parse_string` and :py:func:`parse_file`.
 
     .. parsed-literal::
-
-        to_schema(str) -> Str()
-        to_schema(int) -> Int()
-        to_schema(bool) -> Bool()
-        to_schema(float) -> Float()
-        to_schema(decimal.Decimal) -> Decimal()
-        to_schema(list[*t*]) -> Sequence(to_schema(*t*))
-        to_schema(dict[str, *t*]) -> Mapping({}, to_schema(*t*))
-        to_schema(list_or_single[*t*]) -> SequenceOrSingle(to_schema(*t*))
-        to_schema(comma_separated[*t*]) -> CommaSeparated(to_schema(*t*))
-        to_schema(*t1* | *t2*) -> to_schema(*t1*) | to_schema(*t2*)
+        to_schema(str) → :class:`Str`\ ()
+        to_schema(int) → :class:`Int`\ ()
+        to_schema(bool) → :class:`Bool`\ ()
+        to_schema(float) → :class:`Float`\ ()
+        to_schema(:class:`decimal.Decimal`) → :class:`Decimal`\ ()
+        to_schema(:external:data:`typing.Any`) → :class:`Passthrough`\ ()
+        to_schema(list[★]) → :class:`Sequence`\ (to_schema(★))
+        to_schema(dict[str, ★]) → :class:`Mapping`\ ({}, to_schema(★))
+        to_schema(:class:`list_or_single`\ [★]) → :class:`SequenceOrSingle`\ (to_schema(★))
+        to_schema(:class:`comma_separated`\ [★]) → :class:`CommaSeparated`\ (to_schema(★))
+        to_schema(★\ :sub:`1` | ★\ :sub:`2`\ ) → to_schema(★\ :sub:`1`\ ) | to_schema(★\ :sub:`2`\ )
 
         type spam = int
         type ham[T] = list[T]
 
-        to_schema(spam) -> Int()
-        to_schema(ham[bool]) -> Sequence(Bool())
+        to_schema(spam) → :class:`Int`\ ()
+        to_schema(ham[bool]) → :class:`Sequence`\ (:class:`Bool`\ ())
 
-        class Employee(typing.TypedDict):
+        class Employee(:external:class:`typing.TypedDict`\ ):
             id: int
-            department: typing.NotRequired[str]
+            department: :external:data:`typing.NotRequired`\ [str]
 
             _extra_: bool
 
-        to_schema(Employee) -> Mapping({'id': Int()}, Bool(), optional={'department': Str()})
+        to_schema(Employee) → :class:`Mapping`\ ({'id': :class:`Int`\ ()}, :class:`Bool`\ (), optional={'department': :class:`Str`\ ()})
 
     '''
     if isinstance(type_schema, Schema):
