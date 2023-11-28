@@ -69,6 +69,7 @@ tests = ["tests", "*/kyss/tests"]
 [tool.coverage.report]
 exclude_lines = [
   "no cov",
+  "# unreachable",
   "if __name__ == .__main__.:",
   "if TYPE_CHECKING:",
 ]

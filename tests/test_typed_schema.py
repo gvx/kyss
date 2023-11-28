@@ -28,9 +28,9 @@ class WithoutExtra(TypedDict):
     a: int
 
 def test_without_extra():
-    with pytest.raises(kyss.SchemaError) as exc:
+    with pytest.raises(kyss.KyssSchemaError) as exc:
         kyss.parse_string('a: 1\nb: 2', WithoutExtra)
-    assert str(exc.value) == "expected a mapping that only has the keys ['a'], found {'a': '1', 'b': '2'}"
+    assert str(exc.value) == "Expected a mapping that only has the keys ['a'] at line 1:\na: 1\n^"
 
 def test_simple_sequence():
     assert kyss.parse_string('- 1\n- 2\n- 3', list[int]) == [1, 2, 3]

@@ -10,20 +10,16 @@ Basic API
 
 .. autofunction:: parse_file
 
-.. autoclass:: ParsingFailure
+.. autoclass:: KyssError
+
+.. autoclass:: KyssSyntaxError
+
+.. autoclass:: KyssSchemaError
 
 Schemas
 -------
 
-.. data:: kyss.schema.RawParsed
-   :annotation: = str | dict[str, RawParsed] | list[RawParsed]
-
-   The type of values passed into :meth:`kyss.Schema.parse`.
-
 .. autoclass:: Schema
-   :members:
-
-.. autoclass:: SchemaError
    :members:
 
 .. autoclass:: Alternatives
@@ -46,7 +42,7 @@ Schemas
 
 .. autoclass:: CommaSeparated
 
-.. autoclass:: Passthrough
+.. autoclass:: Accept
 
 Typed schemas
 -------------

@@ -24,11 +24,11 @@ while (start_index := text.find(prefix, start_index)) > -1:
     fragment = text[start_index:end_index]
     start_index = end_index + len(suffix)
     fragment = fragment.replace('\n    ', '\n') # simple dedent
-    fragment.removeprefix('::\n').removeprefix('.. code:: yaml')
+    fragment = fragment.removeprefix('::\n').removeprefix('.. code:: yaml')
     _, expected_output = fragment.split('output ->')
     try:
         actual_output = repr(kyss.parse_string(fragment))
-    except kyss.ParsingFailure as e:
+    except kyss.KyssError as e:
         print('ERROR, could not parse:')
         print(fragment)
         print(e)

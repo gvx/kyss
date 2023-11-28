@@ -4,10 +4,11 @@ from tempfile import NamedTemporaryFile
 import kyss
 import kyss.recursive_descent
 
-from kyss.recursive_descent import Source, ParsingFailure, n_or_more
+from kyss.errors import KyssSyntaxError
+from kyss.recursive_descent import Source, n_or_more
 
 def test_n_or_more():
-    with pytest.raises(ParsingFailure) as exc:
+    with pytest.raises(KyssSyntaxError) as exc:
         def expect_x(s: Source) -> tuple[None, Source]:
             return None, s.expect('x')
         n_or_more(Source('xxx'), expect_x, 4)

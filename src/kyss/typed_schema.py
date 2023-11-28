@@ -6,10 +6,10 @@ from typing import (Any, NotRequired, Required, TypeAliasType, get_args,
                     get_origin, is_typeddict)
 
 from .schema import (Alternatives, Bool, CommaSeparated, Decimal, Float, Int,
-                     Mapping, Passthrough, Schema, Sequence, SequenceOrSingle,
+                     Mapping, Accept, Schema, Sequence, SequenceOrSingle,
                      Str)
 
-TERMINAL_MAPPING: dict[type, Schema] = {bool: Bool(), str: Str(), int: Int(), float: Float(), PyDecimal: Decimal(), Any: Passthrough()}
+TERMINAL_MAPPING: dict[type, Schema] = {bool: Bool(), str: Str(), int: Int(), float: Float(), PyDecimal: Decimal(), Any: Accept()}
 
 # list[T] -> Sequence(to_schema(T))
 # dict[str, T] -> Mapping({}, to_schema(T))
@@ -33,7 +33,7 @@ def to_schema(type_schema: type | Schema) -> Schema:
         to_schema(bool) → :class:`Bool`\ ()
         to_schema(float) → :class:`Float`\ ()
         to_schema(:class:`decimal.Decimal`) → :class:`Decimal`\ ()
-        to_schema(:external:data:`typing.Any`) → :class:`Passthrough`\ ()
+        to_schema(:external:data:`typing.Any`) → :class:`Accept`\ ()
         to_schema(list[★]) → :class:`Sequence`\ (to_schema(★))
         to_schema(dict[str, ★]) → :class:`Mapping`\ ({}, to_schema(★))
         to_schema(:class:`list_or_single`\ [★]) → :class:`SequenceOrSingle`\ (to_schema(★))

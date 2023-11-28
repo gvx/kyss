@@ -5,23 +5,18 @@ from decimal import InvalidOperation
 from typing import (Any, NotRequired, Required, Self, get_args, get_origin,
                     is_typeddict)
 
-#: Passed into :meth:`Schema.parse`
-type RawParsed = str | dict[str, RawParsed] | list[RawParsed]
+from .ast import Node, StrNode, ListNode, DictNode
+from .errors import KyssSchemaError, ordered_set, SourceLocation
 
-class SchemaError(Exception):
-    '''Raised when a kyss value is able to be parsed but is not accepted by the given schema.'''
-    def __init__(self, expected: str, found: RawParsed) -> None:
-        self.expected = expected
-        self.found = found
-    def __str__(self) -> str:
-        return f'expected {self.expected}, found {self.found!r}'
+def schema_error(node: Node, expected: str) -> KyssSchemaError:
+    return KyssSchemaError(node.location, ordered_set(expected))
 
 class Schema:
-    '''Base class for all schema builders. You can implement your own schema builder by subclassing ``Schema`` and overriding the ``parse`` method.'''
+    '''Base class for all schema builders. You can implement your own schema builder by subclassing ``Schema`` and overriding the ``validate`` method.'''
 
-    def parse(self, v: RawParsed) -> Any:
-        '''Validates its argument. If the argument is accepted, returns either the argument unchanged or a value to replace it.
-        If the argument is not accepted, raises :py:class:`SchemaError`.'''
+    def validate(self, node: Node) -> Any:
+        '''Validates its argument. If the argument is accepted, returns the value that should represent the data.
+        If the argument is not accepted, raises :py:exc:`KyssSchemaError`.'''
 
         raise NotImplementedError
 
@@ -31,7 +26,7 @@ class Schema:
     def _get_alternatives(self) -> Iterator['Schema']:
         yield self
 
-    def wrap_in(self, fn: Callable[[Any], Any]) -> 'Wrapper':
+    def wrap_in(self, fn: Callable[[Any], Any], expected: str | None = None) -> 'Wrapper':
         r'''Wrap a schema in a callable.
 
         >>> parse_string('6', Int().wrap_in(lambda x: x * 7))
@@ -40,15 +35,19 @@ class Schema:
         [3, 5, 8]
         '''
 
-        return Wrapper(self, fn)
+        return Wrapper(self, fn, expected)
 
 @dataclass
 class Wrapper(Schema):
     schema: Schema
     fn: Callable[[Any], Any]
+    expected: str | None = None
 
-    def parse(self, v: RawParsed) -> Any:
-        return self.fn(self.schema.parse(v))
+    def validate(self, node: Node) -> Any:
+        try:
+            return self.fn(self.schema.validate(node))
+        except (TypeError, ValueError) as e:
+            raise schema_error(node, self.expected or str(self.fn)) from e
 
 @dataclass
 class Alternatives(Schema):
@@ -59,14 +58,14 @@ class Alternatives(Schema):
 
     alternatives: list[Schema]
 
-    def parse(self, v: RawParsed) -> Any:
-        errs: list[SchemaError | ExceptionGroup[SchemaError]] = []
+    def validate(self, node: Node) -> Any:
+        exp = {}
         for alternative in self.alternatives:
             try:
-                return alternative.parse(v)
-            except* SchemaError as e:
-                errs.extend(e.exceptions)
-        raise ExceptionGroup('none of alternatives valid', errs)
+                return alternative.validate(node)
+            except KyssSchemaError as e:
+                exp |= e.expected
+        raise KyssSchemaError(node.location, exp)
 
     def _get_alternatives(self) -> Iterator[Schema]:
         yield from self.alternatives
@@ -75,56 +74,60 @@ class Alternatives(Schema):
 class Str(Schema):
     'Accepts any scalar and produces it unchanged.'
 
-    def parse(self, v: RawParsed) -> Any:
-        if not isinstance(v, str):
-            raise SchemaError('string', v)
-        return v
+    def validate(self, node: Node) -> Any:
+        if not isinstance(node, StrNode):
+            raise schema_error(node, 'string')
+        return node.value
 
 @dataclass
 class Bool(Schema):
     "Accepts scalars that case-insensitively equal to 'true' or 'false'. Produces a ``bool``."
-    def parse(self, v: RawParsed) -> Any:
-        if isinstance(v, str):
-            v = v.lower()
+
+    def validate(self, node: Node) -> Any:
+        if isinstance(node, StrNode):
+            v = node.value.lower()
             if v == 'true':
                 return True
             elif v == 'false':
                 return False
-        raise SchemaError('true or false', v)
+        raise schema_error(node, 'true or false')
 
 @dataclass
 class Int(Schema):
     'Accepts scalars that Python can interpret as integers. Produces an ``int``.'
-    def parse(self, v: RawParsed) -> Any:
-        if isinstance(v, str):
+
+    def validate(self, node: Node) -> Any:
+        if isinstance(node, StrNode):
             try:
-                return int(v)
+                return int(node.value)
             except ValueError:
                 pass
-        raise SchemaError('integer', v)
+        raise schema_error(node, 'integer')
 
 @dataclass
 class Float(Schema):
     'Accepts scalars that Python can interpret as floating point numbers. Produces a ``float``.'
-    def parse(self, v: RawParsed) -> Any:
-        if isinstance(v, str):
+
+    def validate(self, node: Node) -> Any:
+        if isinstance(node, StrNode):
             try:
-                return float(v)
+                return float(node.value)
             except ValueError:
                 pass
-        raise SchemaError('floating point number', v)
+        raise schema_error(node, 'floating point number')
 
 
 @dataclass
 class Decimal(Schema):
     'Accepts scalars that Python can interpret as a decimal number. Produces a ``decimal.Decimal``.'
-    def parse(self, v: RawParsed) -> Any:
-        if isinstance(v, str):
+
+    def validate(self, node: Node) -> Any:
+        if isinstance(node, StrNode):
             try:
-                return PyDecimal(v)
+                return PyDecimal(node.value)
             except InvalidOperation:
                 pass
-        raise SchemaError('decimal number', v)
+        raise schema_error(node, 'decimal number')
 
 @dataclass
 class Sequence(Schema):
@@ -132,10 +135,10 @@ class Sequence(Schema):
 
     item: Schema
 
-    def parse(self, v: RawParsed) -> Any:
-        if not isinstance(v, list):
-            raise SchemaError('sequence', v)
-        return [self.item.parse(item) for item in v]
+    def validate(self, node: Node) -> Any:
+        if not isinstance(node, ListNode):
+            raise schema_error(node, 'sequence')
+        return [self.item.validate(item) for item in node.children]
 
 @dataclass
 class Mapping(Schema):
@@ -149,22 +152,23 @@ class Mapping(Schema):
     values: Schema | None = None
     optional: dict[str, Schema] | None = field(default=None, kw_only=True)
 
-    def parse(self, v: RawParsed) -> Any:
-        if not isinstance(v, dict):
-            raise SchemaError('mapping', v)
+    def validate(self, node: Node) -> Any:
+        if not isinstance(node, DictNode):
+            raise schema_error(node, 'mapping')
+        v = node.children
         if missing_keys := self.required.keys() - v.keys():
-            raise SchemaError(f'a mapping that has the keys {sorted(self.required)}', v)
+            raise schema_error(node, f'a mapping that has the keys {sorted(self.required)}')
         unspecified_keys = v.keys() - self.required.keys()
         if self.optional is not None:
             unspecified_keys -= self.optional.keys()
         if unspecified_keys and self.values is None:
             keys = sorted([*self.required, *(self.optional or ())])
-            raise SchemaError(f'a mapping that only has the keys {keys}', v)
-        specified = {key: schema.parse(v[key]) for key, schema in self.required.items()}
+            raise schema_error(node, f'a mapping that only has the keys {keys}')
+        specified = {key: schema.validate(v[key]) for key, schema in self.required.items()}
         if self.optional is not None:
-            specified |= {key: schema.parse(v[key]) for key, schema in self.optional.items() if key in v}
+            specified |= {key: schema.validate(v[key]) for key, schema in self.optional.items() if key in v}
         if unspecified_keys and self.values is not None:
-            return specified | {key: self.values.parse(v[key]) for key in unspecified_keys}
+            return specified | {key: self.values.validate(v[key]) for key in unspecified_keys}
         return specified
 
 @dataclass
@@ -175,10 +179,10 @@ class SequenceOrSingle(Schema):
 
     item: Schema
 
-    def parse(self, v: RawParsed) -> Any:
-        if isinstance(v, list):
-            return [self.item.parse(item) for item in v]
-        return [self.item.parse(v)]
+    def validate(self, node: Node) -> Any:
+        if isinstance(node, ListNode):
+            return [self.item.validate(item) for item in node.children]
+        return [self.item.validate(node)]
 
 @dataclass
 class CommaSeparated(Schema):
@@ -189,14 +193,20 @@ class CommaSeparated(Schema):
 
     item: Schema
 
-    def parse(self, v: RawParsed) -> Any:
-        if not isinstance(v, str):
-            raise SchemaError('string', v)
-        return [self.item.parse(item) for item in v.split(',')]
+    def validate(self, node: Node) -> Any:
+        if not isinstance(node, StrNode):
+            raise schema_error(node, 'string')
+        return [self.item.validate(StrNode(node.location, item)) for item in node.value.split(',')]
 
 @dataclass
-class Passthrough(Schema):
+class Accept(Schema):
     '''Accepts any value and produces it unchanged.'''
 
-    def parse(self, v: RawParsed) -> Any:
-        return v
+    def validate(self, node: Node) -> Any:
+        if isinstance(node, StrNode):
+            return node.value
+        elif isinstance(node, ListNode):
+            return [self.validate(item) for item in node.children]
+        elif isinstance(node, DictNode):
+            return {key: self.validate(value) for key, value in node.children.items()}
+        assert False  # unreachable

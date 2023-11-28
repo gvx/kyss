@@ -6,31 +6,10 @@ from os import PathLike
 from pathlib import Path
 from typing import Any, Callable, Literal, Never, Self
 
-from .schema import Schema
+from .schema import Schema, Accept
 from .typed_schema import to_schema
-
-
-@dataclass
-class ParsingFailure(Exception):
-    '''Raised when trying to parse an invalid kyss file or string.'''
-
-    source: 'Source'
-    expected: dict[str, None]
-
-    def format_expected(self) -> str:
-        expected = ', '.join(self.expected)
-        if len(self.expected) > 1:
-            return f'one of {{{expected}}}'
-        return expected
-
-    def __str__(self) -> str:
-        line_nr, col, line = self.source.get_line_info()
-        spaces = ' ' * (col - 1)
-        return f'Expected {self.format_expected()}\nLine: {line_nr}\n{line}\n{spaces}^'
-
-
-def ordered_set(value: str) -> dict[str, None]:
-    return {value: None}
+from .errors import OrderedSet, KyssSyntaxError, SourceLocation, ordered_set
+from .ast import Node, StrNode, ListNode, DictNode
 
 _PENDING = object()
 
@@ -46,15 +25,18 @@ class Source:
     def advance(self, count: int) -> Self:
         return self.advance_to(self.index + count)
 
+    def fail(self, expectation: str) -> Never:
+        raise KyssSyntaxError(SourceLocation.from_source(self), ordered_set(expectation))
+
     def expect(self, expected: str) -> Self:
         if not self.string.startswith(expected, self.index):
-            fail(self, repr(expected))
+            self.fail(repr(expected))
         return self.advance(len(expected))
 
     def match(self, regex: re.Pattern[str], expected: str | None = None) -> tuple[re.Match[str], Self]:
         match_value = regex.match(self.string, self.index)
         if match_value is None:
-            fail(self, expected or str(regex))
+            self.fail(expected or str(regex))
         return match_value, self.advance_to(match_value.end())
 
     def check(self, expected: str) -> bool:
@@ -73,20 +55,8 @@ class Source:
 
     def fix_indentation(self, new_indentation: str) -> Self:
         if not new_indentation.startswith(self.indentation[-2]):
-            fail(self, 'inconsistent indentation')
+            self.fail('inconsistent indentation')
         return replace(self, indentation=self.indentation[:-1] + (new_indentation,))
-
-    def get_line_info(self) -> tuple[int, int, str]:
-        line_nr = self.string.count('\n', 0, self.index)
-        if line_nr:
-            line_start = self.string.rfind('\n', 0, self.index) + 1
-        else:
-            line_start = 0
-        line_end: int | None = self.string.find('\n', self.index)
-        if line_end == -1:
-            line_end = None
-        column_nr = self.index - line_start
-        return line_nr + 1, column_nr, self.string[line_start:line_end]
 
 type Consumer[T] = Callable[[Source], tuple[T, Source]]
 
@@ -95,9 +65,9 @@ def first_valid[T](source: Source, alternatives: list[Consumer[T]]) -> tuple[T, 
     for alternative in alternatives:
         try:
             return alternative(source)
-        except ParsingFailure as e:
+        except KyssSyntaxError as e:
             exp |= e.expected
-    raise ParsingFailure(source, exp)
+    raise KyssSyntaxError(SourceLocation.from_source(source), exp)
 
 
 def n_or_more[T](source: Source, repeated: Consumer[T], minimum: int) -> tuple[list[T], Source]:
@@ -106,10 +76,10 @@ def n_or_more[T](source: Source, repeated: Consumer[T], minimum: int) -> tuple[l
         while True:
             value, source = repeated(source)
             parsed.append(value)
-    except ParsingFailure as e:
+    except KyssSyntaxError as e:
         expected = e.format_expected()
     if len(parsed) < minimum:
-        fail(source, f'At least {minimum} times {expected}')
+        source.fail(f'At least {minimum} times {expected}')
     return parsed, source
 
 
@@ -126,9 +96,6 @@ def compose[T](parsers: list[Consumer[T | Any]], *, select: int) -> Consumer[T |
     return partial(composed_parsers, parsers, select)
 
 
-def fail(s: Source, expectation: str) -> Never:
-    raise ParsingFailure(s, ordered_set(expectation))
-
 def expect_regex_factory(regex: str, expectation: str) -> Consumer[str]:
     c = re.compile(regex)
     def f(s: Source) -> tuple[str, Source]:
@@ -144,7 +111,7 @@ def expect_indentation(s: Source) -> tuple[None, Source]:
         return None, snew.fix_indentation(indentation_found)
     if indentation_found == s.indentation[-1]:
         return None, snew
-    fail(s, 'more indentation')
+    s.fail('more indentation')
 
 plain_re = re.compile(r'(?!-[ \t]|[\'" \t])(:[^ \t\n]|[^ \t\n]#|[^:#\n])+')
 def expect_plain_scalar(s: Source) -> tuple[str, Source]:
@@ -165,7 +132,7 @@ def expect_escape_sequence(s: Source) -> tuple[str, Source]:
     elif selector in {'x', 'u', 'U'}:
         value = chr(int(escaped[1:], 16))
     else:
-        fail(s, 'valid escape sequence')
+        s.fail('valid escape sequence')
     return value, snew
 
 expect_double_quoted_contents = expect_regex_factory(r'[^"\n\\]+', 'double quoted string contents')
@@ -190,11 +157,12 @@ def expect_single_quoted_scalar(s: Source) -> tuple[str, Source]:
         frags.append(frag)
     return ''.join(frags), s.expect("'")
 
-def expect_scalar(s: Source) -> tuple[str, Source]:
-    return first_valid(s, [expect_single_quoted_scalar, expect_double_quoted_scalar, expect_plain_scalar])
+def expect_scalar(s: Source) -> tuple[StrNode, Source]:
+    scalar, snext = first_valid(s, [expect_single_quoted_scalar, expect_double_quoted_scalar, expect_plain_scalar])
+    return StrNode(s, scalar), snext
 
-def expect_value_scalar(s: Source) -> tuple[str, Source]:
-    value, s = expect_value(s)
+def expect_value_scalar(s: Source) -> tuple[StrNode, Source]:
+    value, s = expect_scalar(s)
     _, s = expect_comment(s)
     return value, s
 
@@ -215,89 +183,88 @@ def expect_newline(s: Source) -> tuple[None, Source]:
     _, s = n_or_more(s, expect_single_newline, 1)
     return None, s
 
-def expect_sequence_item_sequence(s: Source, indentation: str) -> tuple[list[Any], Source]:
-    other_items: list[Any]
-    s = s.indent(indentation)
+def expect_sequence_item_sequence(s: Source, indentation: str) -> tuple[ListNode, Source]:
+    other_items: list[Node]
+    svalue = s = s.indent(indentation)
     item, s = expect_sequence_item(s)
     other_items, s = n_or_more(s, compose([expect_newline, expect_indentation, expect_sequence_item], select=2), 0)
-    return [item] + other_items, s.dedent()
+    return ListNode(svalue, [item] + other_items), s.dedent()
 
-def expect_sequence_item_mapping(s: Source, indentation: str) -> tuple[dict[str, Any], Source]:
-    other_items: list[tuple[str, Any]]
-    s = s.indent(indentation)
+def expect_sequence_item_mapping(s: Source, indentation: str) -> tuple[DictNode, Source]:
+    other_items: list[tuple[str, Node]]
+    svalue = s = s.indent(indentation)
     (k1, v1), s = expect_mapping_item(s)
     other_items, s = n_or_more(s, compose([expect_newline, expect_indentation, expect_mapping_item], select=2), 0)
-    return {k1: v1} | {k: v for k, v in other_items}, s.dedent()
+    return DictNode(svalue, {k1: v1} | {k: v for k, v in other_items}), s.dedent()
 
 def expect_sequence_item_value(s: Source, indentation: str) -> tuple[Any, Source]:
     return first_valid(s, [partial(expect_sequence_item_sequence, indentation=indentation), partial(expect_sequence_item_mapping, indentation=indentation), expect_value_scalar])
 
-def expect_sequence_item(s: Source) -> tuple[Any, Source]:
+def expect_sequence_item(s: Source) -> tuple[Node, Source]:
     s = s.expect('-')
     ws, s = s.match(WHITESPACE)
     return expect_sequence_item_value(s, ' ' + ws.group())
 
-def expect_sequence(s: Source) -> tuple[list[Any], Source]:
-    other_items: list[Any]
+def expect_sequence(s: Source) -> tuple[ListNode, Source]:
+    other_items: list[Node]
     _, s = expect_indentation(s)
+    svalue = s
     first_item, s = expect_sequence_item(s)
     other_items, s = n_or_more(s, compose([expect_newline, expect_indentation, expect_sequence_item], select=2), 0)
-    return [first_item] + other_items, s
+    return ListNode(svalue, [first_item] + other_items), s
 
-def expect_scalar_mapping_value(s: Source) -> tuple[str, Source]:
+def expect_scalar_mapping_value(s: Source) -> tuple[StrNode, Source]:
     _, s = s.match(WHITESPACE)
     return expect_value_scalar(s)
 
-def expect_complex_mapping_value(s: Source) -> tuple[Any, Source]:
+def expect_complex_mapping_value(s: Source) -> tuple[Node, Source]:
     s = s.indent()
     _, s = expect_newline(s)
     value, s = first_valid(s, [expect_sequence, expect_mapping])
     return value, s.dedent()
 
-def expect_mapping_value(s: Source) -> tuple[Any, Source]:
+def expect_mapping_value(s: Source) -> tuple[Node, Source]:
     return first_valid(s, [expect_complex_mapping_value, expect_scalar_mapping_value])
 
-def expect_mapping_item(s: Source) -> tuple[tuple[str, Any], Source]:
+def expect_mapping_item(s: Source) -> tuple[tuple[str, Node], Source]:
     key, s = expect_scalar(s)
     s = s.expect(':')
     value, s = expect_mapping_value(s)
-    return (key, value), s
+    return (key.value, value), s
 
-def expect_mapping(s: Source) -> tuple[dict[str, Any], Source]:
-    other_items: list[tuple[str, Any]]
+def expect_mapping(s: Source) -> tuple[DictNode, Source]:
+    other_items: list[tuple[str, Node]]
     _, s = expect_indentation(s)
+    svalue = s
     (k1, v1), s = expect_mapping_item(s)
     other_items, s = n_or_more(s, compose([expect_newline, expect_indentation, expect_mapping_item], select=2), 0)
-    return {k1: v1} | {k: v for k, v in other_items}, s
+    return DictNode(svalue, {k1: v1} | {k: v for k, v in other_items}), s
 
-def expect_value(s: Source) -> tuple[Any, Source]:
+def expect_value(s: Source) -> tuple[Node, Source]:
     return first_valid(s, [expect_sequence, expect_mapping, expect_scalar])
 
-def expect_document(s: Source) -> tuple[Any, Source]:
+def expect_document(s: Source) -> tuple[Node, Source]:
     _, s = n_or_more(s, expect_single_newline, 0)
     value, s = expect_value(s)
     _, s = n_or_more(s, expect_single_newline, 0)
     return value, s
 
 
-def _parse(s: str) -> Any:
+def _parse(s: str) -> Node:
     value, src = expect_document(Source(s))
     if src.index < len(s):
-        fail(src, 'end of document')
+        src.fail('end of document')
     return value
 
-def parse_string(s: str, /, schema: Schema | type | None = None) -> Any:
+def parse_string(s: str, /, schema: Schema | type = Accept()) -> Any:
     '''Parse a kyss string. If a Schema or type schema is provided, it will be used to validate the parsed value
 
     :param s: a str that contains the kyss-encoded value
     :param schema: optional schema to use'''
-    value = _parse(s + '\n')
-    if schema is None:
-        return value
-    return to_schema(schema).parse(value)
+    return to_schema(schema).validate(_parse(s + '\n'))
 
 
-def parse_file(f: PathLike[str], /, schema: Schema | type | None = None) -> Any:
+def parse_file(f: PathLike[str], /, schema: Schema | type = Accept()) -> Any:
     '''Parse a kyss file (utf-8 encoded). If a Schema or type schema is provided, it will be used to validate the parsed value
 
     :param f: a os.PathLike for the file name
