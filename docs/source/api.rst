@@ -55,4 +55,5 @@ Typed schemas
 
    Type syntax version of :py:class:`SequenceOrSingle`.
 
-.. autofunction:: to_schema
+.. autoclass:: SchemaRegistry
+   :members:

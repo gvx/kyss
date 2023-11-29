@@ -12,17 +12,14 @@ from .schema import (Accept, Alternatives, Bool, CommaSeparated, Decimal,
                      Float, Int, Mapping, Schema, Sequence, SequenceOrSingle,
                      Str)
 
-TERMINAL_MAPPING: dict[type, Schema] = {bool: Bool(), str: Str(), int: Int(), float: Float(), PyDecimal: Decimal(), Any: Accept()}
-
-# list[T] -> Sequence(to_schema(T))
-# dict[str, T] -> Mapping({}, to_schema(T))
-# TypedDict('SomeTypedDict', {'a': int, 'b': NotRequired[bool], '_extra_': list[str]}) -> Mapping({'a': Int()}, Sequence(Str()), {'b': Bool()})
 
 class list_or_single[T](list[T]):
     pass
 
+
 class comma_separated[T](list[T]):
     pass
+
 
 class SchemaRegistry:
     def __init__(self) -> None:
@@ -35,31 +32,34 @@ class SchemaRegistry:
         return {key: self.to_schema(value_types[key]) for key in keys if key != '_extra_'}
 
     def register_type(self, type_: type, schema_builder: type[Schema]) -> None:
-        '''Add or override a type'''
+        '''Add or override a type. After ``registry.register_type(MyType, MySchema)``,
+        ``registry.to_schema(MyType)`` → ``MySchema()`` and ``registry.to_schema(MyType[A, B])`` → ``MySchema(registry.to_schema(A), registry.to_schema(B))``.'''
 
         self.schema_builders[type_] = schema_builder
 
     def to_schema(self, type_schema: type | Schema) -> Schema:
         r'''Interpret a type as a schema. Called by :py:func:`parse_string` and :py:func:`parse_file`.
 
+        By default, it operates like this:
+
         .. parsed-literal::
-            self.to_schema(str) → :class:`Str`\ ()
-            self.to_schema(int) → :class:`Int`\ ()
-            self.to_schema(bool) → :class:`Bool`\ ()
-            self.to_schema(float) → :class:`Float`\ ()
-            self.to_schema(:class:`decimal.Decimal`) → :class:`Decimal`\ ()
-            self.to_schema(:external:data:`typing.Any`) → :class:`Accept`\ ()
-            self.to_schema(list[★]) → :class:`Sequence`\ (self.to_schema(★))
-            self.to_schema(dict[str, ★]) → :class:`Mapping`\ ({}, self.to_schema(★))
-            self.to_schema(:class:`list_or_single`\ [★]) → :class:`SequenceOrSingle`\ (self.to_schema(★))
-            self.to_schema(:class:`comma_separated`\ [★]) → :class:`CommaSeparated`\ (self.to_schema(★))
-            self.to_schema(★\ :sub:`1` | ★\ :sub:`2`\ ) → self.to_schema(★\ :sub:`1`\ ) | self.to_schema(★\ :sub:`2`\ )
+            registry.to_schema(str) → :class:`Str`\ ()
+            registry.to_schema(int) → :class:`Int`\ ()
+            registry.to_schema(bool) → :class:`Bool`\ ()
+            registry.to_schema(float) → :class:`Float`\ ()
+            registry.to_schema(:class:`decimal.Decimal`) → :class:`Decimal`\ ()
+            registry.to_schema(:external:data:`typing.Any`) → :class:`Accept`\ ()
+            registry.to_schema(list[★]) → :class:`Sequence`\ (registry.to_schema(★))
+            registry.to_schema(dict[str, ★]) → :class:`Mapping`\ ({}, registry.to_schema(★))
+            registry.to_schema(:class:`list_or_single`\ [★]) → :class:`SequenceOrSingle`\ (registry.to_schema(★))
+            registry.to_schema(:class:`comma_separated`\ [★]) → :class:`CommaSeparated`\ (registry.to_schema(★))
+            registry.to_schema(★\ :sub:`1` | ★\ :sub:`2`\ ) → registry.to_schema(★\ :sub:`1`\ ) | registry.to_schema(★\ :sub:`2`\ )
 
             type spam = int
             type ham[T] = list[T]
 
-            self.to_schema(spam) → :class:`Int`\ ()
-            self.to_schema(ham[bool]) → :class:`Sequence`\ (:class:`Bool`\ ())
+            registry.to_schema(spam) → :class:`Int`\ ()
+            registry.to_schema(ham[bool]) → :class:`Sequence`\ (:class:`Bool`\ ())
 
             class Employee(:external:class:`typing.TypedDict`\ ):
                 id: int
@@ -67,7 +67,7 @@ class SchemaRegistry:
 
                 _extra_: bool
 
-            self.to_schema(Employee) → :class:`Mapping`\ ({'id': :class:`Int`\ ()}, :class:`Bool`\ (), optional={'department': :class:`Str`\ ()})
+            registry.to_schema(Employee) → :class:`Mapping`\ ({'id': :class:`Int`\ ()}, :class:`Bool`\ (), optional={'department': :class:`Str`\ ()})
 
         '''
         if isinstance(type_schema, Schema):
@@ -102,7 +102,6 @@ class SchemaRegistry:
             return self.to_schema(get_args(type_schema)[0])
         raise TypeError(f'invalid schema {type_schema!r}')
 
-
     def parse_string(self, s: str, /, schema: Schema | type = Accept()) -> Any:
         '''Parse a kyss string. If a Schema or type schema is provided, it will be used to validate the parsed value
 
@@ -111,7 +110,6 @@ class SchemaRegistry:
 
         return self.to_schema(schema).validate(parse(s))
 
-
     def parse_file(self, f: PathLike[str], /, schema: Schema | type = Accept()) -> Any:
         '''Parse a kyss file (utf-8 encoded). If a Schema or type schema is provided, it will be used to validate the parsed value
 
@@ -119,6 +117,7 @@ class SchemaRegistry:
         :param schema: optional schema to use'''
 
         return self.parse_string(Path(f).read_text(encoding='utf-8'), schema)
+
 
 default_registry = SchemaRegistry()
 
