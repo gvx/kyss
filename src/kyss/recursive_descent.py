@@ -2,14 +2,11 @@ import re
 import sys
 from dataclasses import dataclass, replace
 from functools import partial
-from os import PathLike
 from pathlib import Path
 from typing import Any, Callable, Literal, Never, Self
 
-from .schema import Schema, Accept
-from .typed_schema import to_schema
-from .errors import OrderedSet, KyssSyntaxError, SourceLocation, ordered_set
-from .ast import Node, StrNode, ListNode, DictNode
+from .ast import DictNode, ListNode, Node, StrNode
+from .errors import KyssSyntaxError, OrderedSet, SourceLocation, ordered_set
 
 _PENDING = object()
 
@@ -256,17 +253,5 @@ def _parse(s: str) -> Node:
         src.fail('end of document')
     return value
 
-def parse_string(s: str, /, schema: Schema | type = Accept()) -> Any:
-    '''Parse a kyss string. If a Schema or type schema is provided, it will be used to validate the parsed value
-
-    :param s: a str that contains the kyss-encoded value
-    :param schema: optional schema to use'''
-    return to_schema(schema).validate(_parse(s + '\n'))
-
-
-def parse_file(f: PathLike[str], /, schema: Schema | type = Accept()) -> Any:
-    '''Parse a kyss file (utf-8 encoded). If a Schema or type schema is provided, it will be used to validate the parsed value
-
-    :param f: a os.PathLike for the file name
-    :param schema: optional schema to use'''
-    return parse_string(Path(f).read_text(encoding='utf-8'), schema)
+def parse(s: str) -> Node:
+    return _parse(s + '\n')

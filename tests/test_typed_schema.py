@@ -57,3 +57,20 @@ def test_invalid_typed_schema():
     with pytest.raises(TypeError) as exc:
         kyss.parse_string('---', set)
     assert str(exc.value) == "invalid schema <class 'set'>"
+
+def test_registry():
+    reg = kyss.SchemaRegistry()
+    def make_bytes_schema():
+        return kyss.Str().wrap_in(lambda x: x.encode('utf-8'))
+    reg.register_type(bytes, make_bytes_schema)
+
+    assert reg.parse_string('abc', bytes) == b'abc'
+
+    def make_set_schema(*args):
+        return kyss.Sequence(*args).wrap_in(set)
+    reg.register_type(set, make_set_schema)
+    assert reg.parse_string('''
+- 3
+- 1
+- 2
+- 1''', set[int]) == {1, 2, 3}

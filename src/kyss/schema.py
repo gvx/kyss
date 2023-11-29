@@ -5,8 +5,9 @@ from decimal import InvalidOperation
 from typing import (Any, NotRequired, Required, Self, get_args, get_origin,
                     is_typeddict)
 
-from .ast import Node, StrNode, ListNode, DictNode
-from .errors import KyssSchemaError, ordered_set, SourceLocation
+from .ast import DictNode, ListNode, Node, StrNode
+from .errors import KyssSchemaError, SourceLocation, ordered_set
+
 
 def schema_error(node: Node, expected: str) -> KyssSchemaError:
     return KyssSchemaError(node.location, ordered_set(expected))

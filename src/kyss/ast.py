@@ -1,6 +1,7 @@
-from dataclasses import dataclass, field, InitVar
+from dataclasses import InitVar, dataclass, field
 
 from .errors import SourceLocation
+
 
 @dataclass
 class Node:
