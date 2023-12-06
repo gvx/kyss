@@ -52,21 +52,21 @@ Nodes
    .. autoclass:: Node()
       :members:
 
-   .. autoclass:: StrNode()
+   .. autoclass:: ScalarNode()
 
       .. attribute:: kind
          :annotation: = 'scalar'
 
       .. autoattribute:: value
 
-   .. autoclass:: ListNode()
+   .. autoclass:: SequenceNode()
 
       .. attribute:: kind
          :annotation: = 'sequence'
 
       .. autoattribute:: children
 
-   .. autoclass:: DictNode()
+   .. autoclass:: MappingNode()
 
       .. attribute:: kind
          :annotation: = 'mapping'

@@ -41,32 +41,39 @@ class SchemaRegistry:
 
         By default, it operates like this:
 
-        .. parsed-literal::
-            registry.to_schema(str) → :class:`Str`\ ()
-            registry.to_schema(int) → :class:`Int`\ ()
-            registry.to_schema(bool) → :class:`Bool`\ ()
-            registry.to_schema(float) → :class:`Float`\ ()
-            registry.to_schema(:class:`decimal.Decimal`) → :class:`Decimal`\ ()
-            registry.to_schema(:external:data:`typing.Any`) → :class:`Accept`\ ()
-            registry.to_schema(list[★]) → :class:`List`\ (registry.to_schema(★))
-            registry.to_schema(dict[str, ★]) → :class:`Dict`\ ({}, registry.to_schema(★))
-            registry.to_schema(:class:`list_or_single`\ [★]) → :class:`ListOrSingle`\ (registry.to_schema(★))
-            registry.to_schema(:class:`comma_separated`\ [★]) → :class:`CommaSeparated`\ (registry.to_schema(★))
-            registry.to_schema(★\ :sub:`1` | ★\ :sub:`2`\ ) → registry.to_schema(★\ :sub:`1`\ ) | registry.to_schema(★\ :sub:`2`\ )
+        - ``registry.to_schema(str)`` → :class:`kyss.Str`\ ``()``
+        - ``registry.to_schema(int)`` → :class:`kyss.Int`\ ``()``
+        - ``registry.to_schema(bool)`` → :class:`kyss.Bool`\ ``()``
+        - ``registry.to_schema(float)`` → :class:`kyss.Float`\ ``()``
+        - ``registry.to_schema(``:class:`decimal.Decimal`\ ``)`` → :class:`kyss.Decimal`\ ``()``
+        - ``registry.to_schema(``:external:data:`typing.Any`\ ``)`` → :class:`kyss.Accept`\ ``()``
+        - ``registry.to_schema(list[★])`` → :class:`kyss.List`\ ``(registry.to_schema(★))``
+        - ``registry.to_schema(dict[str, ★])`` → :class:`kyss.Dict`\ ``({}, registry.to_schema(★))``
+        - ``registry.to_schema(``:class:`list_or_single`\ ``[★])`` → :class:`kyss.ListOrSingle`\ ``(registry.to_schema(★))``
+        - ``registry.to_schema(``:class:`comma_separated`\ ``[★])`` → :class:`kyss.CommaSeparated`\ ``(registry.to_schema(★))``
+        - ``registry.to_schema(★ | ♦)`` → ``registry.to_schema(★) | registry.to_schema(♦)``
 
-            type spam = int
-            type ham[T] = list[T]
+        - Given
 
-            registry.to_schema(spam) → :class:`Int`\ ()
-            registry.to_schema(ham[bool]) → :class:`List`\ (:class:`Bool`\ ())
+            ::
 
-            class Employee(:external:class:`typing.TypedDict`\ ):
-                id: int
-                department: :external:data:`typing.NotRequired`\ [str]
+                type spam = int
+                type ham[T] = list[T]
 
-                _extra_: bool
+            - ``registry.to_schema(spam)`` → :class:`kyss.Int`\ ``()``
+            - ``registry.to_schema(ham[bool])`` → :class:`kyss.List`\ ``(``:class:`kyss.Bool`\ ``())``
 
-            registry.to_schema(Employee) → :class:`Dict`\ ({'id': :class:`Int`\ ()}, :class:`Bool`\ (), optional={'department': :class:`Str`\ ()})
+        - Given
+
+            .. parsed-literal::
+
+                class Employee(:external:class:`typing.TypedDict`\ ):
+                    id: int
+                    department: :external:data:`typing.NotRequired`\ [str]
+
+                    _extra_: bool
+
+            - ``registry.to_schema(Employee)`` → :class:`kyss.Dict`\ ``({'id':`` :class:`kyss.Int`\ ``()},`` :class:`kyss.Bool`\ ``(), optional={'department':`` :class:`kyss.Str`\ ``()})``
 
         '''
         if isinstance(type_schema, Schema):

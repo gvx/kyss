@@ -5,8 +5,9 @@ from decimal import InvalidOperation
 from typing import (Any, NotRequired, Required, Self, get_args, get_origin,
                     is_typeddict)
 
-from .ast import DictNode, ListNode, Node, StrNode
+from .ast import Node, ScalarNode
 from .errors import KyssSchemaError, SourceLocation
+
 
 class Schema:
     '''Base class for all schema builders. You can implement your own schema builder by subclassing ``Schema`` and overriding the ``validate`` method.'''
@@ -80,7 +81,7 @@ class Bool(Schema):
     "Accepts scalars that case-insensitively equal to 'true' or 'false'. Produces a ``bool``."
 
     def validate(self, node: Node) -> Any:
-        if node.is_scalar():
+        if node.kind == 'scalar':
             v = node.value.lower()
             if v == 'true':
                 return True
@@ -93,7 +94,7 @@ class Int(Schema):
     'Accepts scalars that Python can interpret as integers. Produces an ``int``.'
 
     def validate(self, node: Node) -> Any:
-        if node.is_scalar():
+        if node.kind == 'scalar':
             try:
                 return int(node.value)
             except ValueError:
@@ -105,7 +106,7 @@ class Float(Schema):
     'Accepts scalars that Python can interpret as floating point numbers. Produces a ``float``.'
 
     def validate(self, node: Node) -> Any:
-        if node.is_scalar():
+        if node.kind == 'scalar':
             try:
                 return float(node.value)
             except ValueError:
@@ -118,7 +119,7 @@ class Decimal(Schema):
     'Accepts scalars that Python can interpret as a decimal number. Produces a ``decimal.Decimal``.'
 
     def validate(self, node: Node) -> Any:
-        if node.is_scalar():
+        if node.kind == 'scalar':
             try:
                 return PyDecimal(node.value)
             except InvalidOperation:
@@ -174,7 +175,7 @@ class ListOrSingle(Schema):
     item: Schema
 
     def validate(self, node: Node) -> Any:
-        if node.is_sequence():
+        if node.kind == 'sequence':
             return [self.item.validate(item) for item in node.children]
         return [self.item.validate(node)]
 
@@ -189,17 +190,17 @@ class CommaSeparated(Schema):
 
     def validate(self, node: Node) -> Any:
         node.require_scalar()
-        return [self.item.validate(StrNode(node.location, item)) for item in node.value.split(',')]
+        return [self.item.validate(ScalarNode(node.location, item)) for item in node.value.split(',')]
 
 @dataclass
 class Accept(Schema):
     '''Accepts any value and produces it unchanged.'''
 
     def validate(self, node: Node) -> Any:
-        if node.is_scalar():
+        if node.kind == 'scalar':
             return node.value
-        elif node.is_sequence():
+        elif node.kind == 'sequence':
             return [self.validate(item) for item in node.children]
-        elif node.is_mapping():
+        elif node.kind == 'mapping':
             return {key: self.validate(value) for key, value in node.children.items()}
         assert False  # unreachable

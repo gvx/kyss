@@ -5,7 +5,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Literal, Never, Self
 
-from .ast import DictNode, ListNode, Node, StrNode
+from .ast import MappingNode, Node, ScalarNode, SequenceNode
 from .errors import KyssSyntaxError, OrderedSet, SourceLocation, ordered_set
 
 _PENDING = object()
@@ -154,11 +154,11 @@ def expect_single_quoted_scalar(s: Source) -> tuple[str, Source]:
         frags.append(frag)
     return ''.join(frags), s.expect("'")
 
-def expect_scalar(s: Source) -> tuple[StrNode, Source]:
+def expect_scalar(s: Source) -> tuple[ScalarNode, Source]:
     scalar, snext = first_valid(s, [expect_single_quoted_scalar, expect_double_quoted_scalar, expect_plain_scalar])
-    return StrNode(s, scalar), snext
+    return ScalarNode(s, scalar), snext
 
-def expect_value_scalar(s: Source) -> tuple[StrNode, Source]:
+def expect_value_scalar(s: Source) -> tuple[ScalarNode, Source]:
     value, s = expect_scalar(s)
     _, s = expect_comment(s)
     return value, s
@@ -180,19 +180,19 @@ def expect_newline(s: Source) -> tuple[None, Source]:
     _, s = n_or_more(s, expect_single_newline, 1)
     return None, s
 
-def expect_sequence_item_sequence(s: Source, indentation: str) -> tuple[ListNode, Source]:
+def expect_sequence_item_sequence(s: Source, indentation: str) -> tuple[SequenceNode, Source]:
     other_items: list[Node]
     svalue = s = s.indent(indentation)
     item, s = expect_sequence_item(s)
     other_items, s = n_or_more(s, compose([expect_newline, expect_indentation, expect_sequence_item], select=2), 0)
-    return ListNode(svalue, [item] + other_items), s.dedent()
+    return SequenceNode(svalue, [item] + other_items), s.dedent()
 
-def expect_sequence_item_mapping(s: Source, indentation: str) -> tuple[DictNode, Source]:
+def expect_sequence_item_mapping(s: Source, indentation: str) -> tuple[MappingNode, Source]:
     other_items: list[tuple[str, Node]]
     svalue = s = s.indent(indentation)
     (k1, v1), s = expect_mapping_item(s)
     other_items, s = n_or_more(s, compose([expect_newline, expect_indentation, expect_mapping_item], select=2), 0)
-    return DictNode(svalue, {k1: v1} | {k: v for k, v in other_items}), s.dedent()
+    return MappingNode(svalue, {k1: v1} | {k: v for k, v in other_items}), s.dedent()
 
 def expect_sequence_item_value(s: Source, indentation: str) -> tuple[Any, Source]:
     return first_valid(s, [partial(expect_sequence_item_sequence, indentation=indentation), partial(expect_sequence_item_mapping, indentation=indentation), expect_value_scalar])
@@ -202,15 +202,15 @@ def expect_sequence_item(s: Source) -> tuple[Node, Source]:
     ws, s = s.match(WHITESPACE)
     return expect_sequence_item_value(s, ' ' + ws.group())
 
-def expect_sequence(s: Source) -> tuple[ListNode, Source]:
+def expect_sequence(s: Source) -> tuple[SequenceNode, Source]:
     other_items: list[Node]
     _, s = expect_indentation(s)
     svalue = s
     first_item, s = expect_sequence_item(s)
     other_items, s = n_or_more(s, compose([expect_newline, expect_indentation, expect_sequence_item], select=2), 0)
-    return ListNode(svalue, [first_item] + other_items), s
+    return SequenceNode(svalue, [first_item] + other_items), s
 
-def expect_scalar_mapping_value(s: Source) -> tuple[StrNode, Source]:
+def expect_scalar_mapping_value(s: Source) -> tuple[ScalarNode, Source]:
     _, s = s.match(WHITESPACE)
     return expect_value_scalar(s)
 
@@ -229,13 +229,13 @@ def expect_mapping_item(s: Source) -> tuple[tuple[str, Node], Source]:
     value, s = expect_mapping_value(s)
     return (key.value, value), s
 
-def expect_mapping(s: Source) -> tuple[DictNode, Source]:
+def expect_mapping(s: Source) -> tuple[MappingNode, Source]:
     other_items: list[tuple[str, Node]]
     _, s = expect_indentation(s)
     svalue = s
     (k1, v1), s = expect_mapping_item(s)
     other_items, s = n_or_more(s, compose([expect_newline, expect_indentation, expect_mapping_item], select=2), 0)
-    return DictNode(svalue, {k1: v1} | {k: v for k, v in other_items}), s
+    return MappingNode(svalue, {k1: v1} | {k: v for k, v in other_items}), s
 
 def expect_value(s: Source) -> tuple[Node, Source]:
     return first_valid(s, [expect_sequence, expect_mapping, expect_scalar])

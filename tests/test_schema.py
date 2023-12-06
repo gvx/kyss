@@ -50,7 +50,7 @@ def test_invalid_multiple():
 def test_invalid_str():
     with pytest.raises(kyss.KyssSchemaError) as exc:
         kyss.parse_string('a: b', kyss.Str())
-    assert str(exc.value) == "Expected string at line 1:\na: b\n^"
+    assert str(exc.value) == "Expected scalar at line 1:\na: b\n^"
 
 def test_found_nonscalar1():
     with pytest.raises(kyss.KyssSchemaError) as exc:
@@ -75,7 +75,7 @@ def test_found_nonscalar4():
 def test_found_nonscalar5():
     with pytest.raises(kyss.KyssSchemaError) as exc:
         kyss.parse_string('a: b', kyss.CommaSeparated(kyss.Str()))
-    assert str(exc.value) == "Expected string at line 1:\na: b\n^"
+    assert str(exc.value) == "Expected scalar at line 1:\na: b\n^"
 
 def test_wrappers():
     assert kyss.parse_string('test', kyss.Str().wrap_in(len)) == 4
