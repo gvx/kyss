@@ -67,7 +67,7 @@ def test_registry():
     assert reg.parse_string('abc', bytes) == b'abc'
 
     def make_set_schema(*args):
-        return kyss.Sequence(*args).wrap_in(set)
+        return kyss.List(*args).wrap_in(set)
     reg.register_type(set, make_set_schema)
     assert reg.parse_string('''
 - 3

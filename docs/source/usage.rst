@@ -58,11 +58,11 @@ For example::
 
     import kyss
 
-    regeneration_schema = kyss.Mapping({'actor': kyss.Str(),
-                                        'regeneration': kyss.Int()})
+    regeneration_schema = kyss.Dict({'actor': kyss.Str(),
+                                     'regeneration': kyss.Int()})
 
     example3 = '''...''' # paste in the text from the previous example
-    pprint(kyss.parse_string(example3, schema=kyss.Sequence(regeneration_schema)))
+    pprint(kyss.parse_string(example3, schema=kyss.List(regeneration_schema)))
 
     # output:
     # [{'actor': 'Christopher Eccleston', 'regeneration': 9},
@@ -77,8 +77,8 @@ Now, suppose we want to add David Tennant's new character the Fourteenth Doctor,
 
     import kyss
 
-    regeneration_schema = kyss.Mapping({'actor': kyss.Str(),
-                                        'regeneration': kyss.SequenceOrSingle(kyss.Int())})
+    regeneration_schema = kyss.Dict({'actor': kyss.Str(),
+                                     'regeneration': kyss.ListOrSingle(kyss.Int())})
 
     example4 = '''
     - actor: Christopher Eccleston
@@ -94,7 +94,7 @@ Now, suppose we want to add David Tennant's new character the Fourteenth Doctor,
     - actor: Jodie Whittaker
       regeneration: 13
     '''
-    pprint(kyss.parse_string(example4, schema=kyss.Sequence(regeneration_schema)))
+    pprint(kyss.parse_string(example4, schema=kyss.List(regeneration_schema)))
 
     # output:
     # [{'actor': 'Christopher Eccleston', 'regeneration': [9]},
@@ -103,11 +103,11 @@ Now, suppose we want to add David Tennant's new character the Fourteenth Doctor,
     #  {'actor': 'Peter Capaldi', 'regeneration': [12]},
     #  {'actor': 'Jodie Whittaker', 'regeneration': [13]}]
 
-Using :class:`kyss.SequenceOrSingle` means that the value associated with ``'regeneration'`` is always a list of integers.
+Using :class:`kyss.ListOrSingle` means that the value associated with ``'regeneration'`` is always a list of integers.
 
 If you want more control over how data gets interpreted, you can subclass :class:`kyss.Schema`, and override :meth:`kyss.Schema.parse`. It should raise :exc:`kyss.SchemaError` if the data doesn't fit your schema.
 
-.. TODO: advanced uses of Mapping
+.. TODO: advanced uses of Dict
 .. TODO: Alternatives
 .. TODO: wrap_in
 .. TODO: writing your own schemas
@@ -173,7 +173,7 @@ If you want to use custom :class:`kyss.Schema` subclasses or  :meth:`kyss.Schema
             return [self.item.validate(item) for item in node.children]
 
     def make_set_schema(*args):
-        return kyss.Sequence(*args).wrap_in(set)
+        return kyss.List(*args).wrap_in(set)
 
     registry.register_type(set, make_set_schema)
 

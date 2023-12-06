@@ -8,9 +8,8 @@ from typing import (Any, NotRequired, Required, TypeAliasType, get_args,
                     get_origin, is_typeddict)
 
 from .recursive_descent import parse
-from .schema import (Accept, Alternatives, Bool, CommaSeparated, Decimal,
-                     Float, Int, Mapping, Schema, Sequence, SequenceOrSingle,
-                     Str)
+from .schema import (Accept, Alternatives, Bool, CommaSeparated, Decimal, Dict,
+                     Float, Int, List, ListOrSingle, Schema, Str)
 
 
 class list_or_single[T](list[T]):
@@ -25,7 +24,7 @@ class SchemaRegistry:
     def __init__(self) -> None:
         self.schema_builders = {bool: Bool, str: Str, int: Int, float: Float,
                                 PyDecimal: Decimal, Any: Accept,
-                                list_or_single: SequenceOrSingle,
+                                list_or_single: ListOrSingle,
                                 comma_separated: CommaSeparated}
 
     def _mapping_specified(self, value_types: dict[str, type], keys: Iterable[str]) -> dict[str, Schema]:
@@ -49,9 +48,9 @@ class SchemaRegistry:
             registry.to_schema(float) → :class:`Float`\ ()
             registry.to_schema(:class:`decimal.Decimal`) → :class:`Decimal`\ ()
             registry.to_schema(:external:data:`typing.Any`) → :class:`Accept`\ ()
-            registry.to_schema(list[★]) → :class:`Sequence`\ (registry.to_schema(★))
-            registry.to_schema(dict[str, ★]) → :class:`Mapping`\ ({}, registry.to_schema(★))
-            registry.to_schema(:class:`list_or_single`\ [★]) → :class:`SequenceOrSingle`\ (registry.to_schema(★))
+            registry.to_schema(list[★]) → :class:`List`\ (registry.to_schema(★))
+            registry.to_schema(dict[str, ★]) → :class:`Dict`\ ({}, registry.to_schema(★))
+            registry.to_schema(:class:`list_or_single`\ [★]) → :class:`ListOrSingle`\ (registry.to_schema(★))
             registry.to_schema(:class:`comma_separated`\ [★]) → :class:`CommaSeparated`\ (registry.to_schema(★))
             registry.to_schema(★\ :sub:`1` | ★\ :sub:`2`\ ) → registry.to_schema(★\ :sub:`1`\ ) | registry.to_schema(★\ :sub:`2`\ )
 
@@ -59,7 +58,7 @@ class SchemaRegistry:
             type ham[T] = list[T]
 
             registry.to_schema(spam) → :class:`Int`\ ()
-            registry.to_schema(ham[bool]) → :class:`Sequence`\ (:class:`Bool`\ ())
+            registry.to_schema(ham[bool]) → :class:`List`\ (:class:`Bool`\ ())
 
             class Employee(:external:class:`typing.TypedDict`\ ):
                 id: int
@@ -67,7 +66,7 @@ class SchemaRegistry:
 
                 _extra_: bool
 
-            registry.to_schema(Employee) → :class:`Mapping`\ ({'id': :class:`Int`\ ()}, :class:`Bool`\ (), optional={'department': :class:`Str`\ ()})
+            registry.to_schema(Employee) → :class:`Dict`\ ({'id': :class:`Int`\ ()}, :class:`Bool`\ (), optional={'department': :class:`Str`\ ()})
 
         '''
         if isinstance(type_schema, Schema):
@@ -83,8 +82,8 @@ class SchemaRegistry:
             extra: Schema | None = None
             if '_extra_' in value_types and value_types['_extra_'] is not None:
                 extra = self.to_schema(value_types['_extra_'])
-            return Mapping(self._mapping_specified(value_types, required), extra,
-                           optional=self._mapping_specified(value_types, optional))
+            return Dict(self._mapping_specified(value_types, required), extra,
+                        optional=self._mapping_specified(value_types, optional))
         origin = get_origin(type_schema)
         if origin is UnionType:
             return Alternatives([self.to_schema(alt) for alt in get_args(type_schema)])
@@ -93,11 +92,11 @@ class SchemaRegistry:
         elif origin in self.schema_builders:
             return self.schema_builders[origin](*map(self.to_schema, get_args(type_schema)))
         elif origin is list:
-            return Sequence(self.to_schema(get_args(type_schema)[0]))
+            return List(self.to_schema(get_args(type_schema)[0]))
         elif origin is dict:
             t_key, t_value = get_args(type_schema)
             assert t_key is str
-            return Mapping({}, self.to_schema(t_value))
+            return Dict({}, self.to_schema(t_value))
         elif origin in {Required, NotRequired}:
             return self.to_schema(get_args(type_schema)[0])
         raise TypeError(f'invalid schema {type_schema!r}')

@@ -10,6 +10,7 @@ from .errors import KyssSchemaError, SourceLocation, ordered_set
 
 
 def schema_error(node: Node, expected: str) -> KyssSchemaError:
+    'Helper function to create an exception from a Node object'
     return KyssSchemaError(node.location, ordered_set(expected))
 
 class Schema:
@@ -32,7 +33,7 @@ class Schema:
 
         >>> parse_string('6', Int().wrap_in(lambda x: x * 7))
         42
-        >>> parse_string('- one\n- seven\n- thirteen', Sequence(Str().wrap_in(len)))
+        >>> parse_string('- one\n- seven\n- thirteen', List(Str().wrap_in(len)))
         [3, 5, 8]
         '''
 
@@ -131,7 +132,7 @@ class Decimal(Schema):
         raise schema_error(node, 'decimal number')
 
 @dataclass
-class Sequence(Schema):
+class List(Schema):
     'Accepts sequences where each item is accepted by the ``item`` schema. Produces a ``list``.'
 
     item: Schema
@@ -142,7 +143,7 @@ class Sequence(Schema):
         return [self.item.validate(item) for item in node.children]
 
 @dataclass
-class Mapping(Schema):
+class Dict(Schema):
     '''Accepts mappings. Produces a ``dict``.
 
     :param required: maps required keys to the schemas for their respective values.
@@ -173,7 +174,7 @@ class Mapping(Schema):
         return specified
 
 @dataclass
-class SequenceOrSingle(Schema):
+class ListOrSingle(Schema):
     '''Accepts either a sequence where each item is accepted by ``item`` or a non-sequence value that is accepted by ``item``. Always produces a ``list``, regardless.
 
     :param item: the schema used for either the sequence items or the non-sequence value.'''

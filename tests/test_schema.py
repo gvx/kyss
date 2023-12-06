@@ -10,19 +10,19 @@ def test_decimal():
     assert kyss.parse_string('42', kyss.Decimal()) == decimal.Decimal(42)
 
 def test_one_or_more():
-    assert kyss.parse_string('42', kyss.SequenceOrSingle(kyss.Int())) == [42]
+    assert kyss.parse_string('42', kyss.ListOrSingle(kyss.Int())) == [42]
 
 def test_alternatives():
     assert kyss.parse_string('3.14', kyss.Int() | kyss.Bool() | kyss.Float()) == 3.14
 
 def test_simple_mapping():
-    assert kyss.parse_string('a: 7\nb: true\nc: x', kyss.Mapping({'a': kyss.Int()}, kyss.Str(), optional={'b': kyss.Bool()})) == {'a': 7, 'b': True, 'c': 'x'}
+    assert kyss.parse_string('a: 7\nb: true\nc: x', kyss.Dict({'a': kyss.Int()}, kyss.Str(), optional={'b': kyss.Bool()})) == {'a': 7, 'b': True, 'c': 'x'}
 
 def test_simple_sequence():
-    assert kyss.parse_string('- 1\n- 2\n- 3', kyss.Sequence(kyss.Int())) == [1, 2, 3]
+    assert kyss.parse_string('- 1\n- 2\n- 3', kyss.List(kyss.Int())) == [1, 2, 3]
 
 def test_simple_sequence_or_single():
-    assert kyss.parse_string('- 1\n- 2\n- 3', kyss.SequenceOrSingle(kyss.Int())) == [1, 2, 3]
+    assert kyss.parse_string('- 1\n- 2\n- 3', kyss.ListOrSingle(kyss.Int())) == [1, 2, 3]
 
 def test_comma_separated():
     assert kyss.parse_string('1,2,false', kyss.CommaSeparated(kyss.Int() | kyss.Bool())) == [1, 2, False]
@@ -82,26 +82,26 @@ def test_wrappers():
 
 def test_invalid_mapping1():
     with pytest.raises(kyss.KyssSchemaError) as exc:
-        kyss.parse_string('a:b', kyss.Mapping({'a': kyss.Str()}))
+        kyss.parse_string('a:b', kyss.Dict({'a': kyss.Str()}))
     assert str(exc.value) == "Expected mapping at line 1:\na:b\n^"
 
 def test_invalid_mapping2():
     with pytest.raises(kyss.KyssSchemaError) as exc:
-        kyss.parse_string('b: b', kyss.Mapping({'a': kyss.Str()}))
+        kyss.parse_string('b: b', kyss.Dict({'a': kyss.Str()}))
     assert str(exc.value) == "Expected a mapping that has the keys ['a'] at line 1:\nb: b\n^"
 
 def test_invalid_mapping3():
     with pytest.raises(kyss.KyssSchemaError) as exc:
-        kyss.parse_string('a: b\nb: b', kyss.Mapping({'a': kyss.Str()}))
+        kyss.parse_string('a: b\nb: b', kyss.Dict({'a': kyss.Str()}))
     assert str(exc.value) == "Expected a mapping that only has the keys ['a'] at line 1:\na: b\n^"
 
 def test_invalid_sequence():
     with pytest.raises(kyss.KyssSchemaError) as exc:
-        kyss.parse_string('a: b\nb: b', kyss.Sequence(kyss.Str()))
+        kyss.parse_string('a: b\nb: b', kyss.List(kyss.Str()))
     assert str(exc.value) == "Expected sequence at line 1:\na: b\n^"
 
 def test_mapping2():
-    assert kyss.parse_string('a: b', kyss.Mapping({'a': kyss.Str()})) == {'a': 'b'}
+    assert kyss.parse_string('a: b', kyss.Dict({'a': kyss.Str()})) == {'a': 'b'}
 
 def test_parse_needs_implementing():
     with pytest.raises(NotImplementedError):

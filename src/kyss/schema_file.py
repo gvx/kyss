@@ -2,15 +2,15 @@ import ast
 from pathlib import Path
 from typing import NotRequired, Required, TypedDict
 
-from .schema import (Bool, CommaSeparated, Decimal, Float, Int, Mapping,
-                     Schema, Sequence, SequenceOrSingle, Str)
+from .schema import (Bool, CommaSeparated, Decimal, Dict, Float, Int, List,
+                     ListOrSingle, Schema, Str)
 from .typed_schema import comma_separated, list_or_single, to_schema
 
 AVAILABLE_SYMBOLS = {
     # from typing:
     TypedDict, Required, NotRequired,
     # from .schema:
-    Schema, Str, Int, Float, Decimal, Bool, Sequence, Mapping, SequenceOrSingle, CommaSeparated,
+    Schema, Str, Int, Float, Decimal, Bool, List, Dict, ListOrSingle, CommaSeparated,
     # from .typed_schema:
     list_or_single, comma_separated, to_schema
 }
