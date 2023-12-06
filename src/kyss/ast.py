@@ -1,6 +1,6 @@
 from dataclasses import InitVar, dataclass, field
 
-from .errors import SourceLocation
+from .errors import SourceLocation, KyssSchemaError, ordered_set
 
 
 @dataclass
@@ -10,6 +10,10 @@ class Node:
 
     def __post_init__(self, source):
         self.location = SourceLocation.from_source(source)
+
+    def error(self, expected: str) -> KyssSchemaError:
+        'Helper function to create an exception from a Node object'
+        return KyssSchemaError(self.location, ordered_set(expected))
 
 
 @dataclass

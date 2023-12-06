@@ -6,12 +6,7 @@ from typing import (Any, NotRequired, Required, Self, get_args, get_origin,
                     is_typeddict)
 
 from .ast import DictNode, ListNode, Node, StrNode
-from .errors import KyssSchemaError, SourceLocation, ordered_set
-
-
-def schema_error(node: Node, expected: str) -> KyssSchemaError:
-    'Helper function to create an exception from a Node object'
-    return KyssSchemaError(node.location, ordered_set(expected))
+from .errors import KyssSchemaError, SourceLocation
 
 class Schema:
     '''Base class for all schema builders. You can implement your own schema builder by subclassing ``Schema`` and overriding the ``validate`` method.'''
@@ -49,7 +44,7 @@ class Wrapper(Schema):
         try:
             return self.fn(self.schema.validate(node))
         except (TypeError, ValueError) as e:
-            raise schema_error(node, self.expected or str(self.fn)) from e
+            raise node.error(self.expected or str(self.fn)) from e
 
 @dataclass
 class Alternatives(Schema):
@@ -78,7 +73,7 @@ class Str(Schema):
 
     def validate(self, node: Node) -> Any:
         if not isinstance(node, StrNode):
-            raise schema_error(node, 'string')
+            raise node.error('string')
         return node.value
 
 @dataclass
@@ -92,7 +87,7 @@ class Bool(Schema):
                 return True
             elif v == 'false':
                 return False
-        raise schema_error(node, 'true or false')
+        raise node.error('true or false')
 
 @dataclass
 class Int(Schema):
@@ -104,7 +99,7 @@ class Int(Schema):
                 return int(node.value)
             except ValueError:
                 pass
-        raise schema_error(node, 'integer')
+        raise node.error('integer')
 
 @dataclass
 class Float(Schema):
@@ -116,7 +111,7 @@ class Float(Schema):
                 return float(node.value)
             except ValueError:
                 pass
-        raise schema_error(node, 'floating point number')
+        raise node.error('floating point number')
 
 
 @dataclass
@@ -129,7 +124,7 @@ class Decimal(Schema):
                 return PyDecimal(node.value)
             except InvalidOperation:
                 pass
-        raise schema_error(node, 'decimal number')
+        raise node.error('decimal number')
 
 @dataclass
 class List(Schema):
@@ -139,7 +134,7 @@ class List(Schema):
 
     def validate(self, node: Node) -> Any:
         if not isinstance(node, ListNode):
-            raise schema_error(node, 'sequence')
+            raise node.error('sequence')
         return [self.item.validate(item) for item in node.children]
 
 @dataclass
@@ -156,16 +151,16 @@ class Dict(Schema):
 
     def validate(self, node: Node) -> Any:
         if not isinstance(node, DictNode):
-            raise schema_error(node, 'mapping')
+            raise node.error('mapping')
         v = node.children
         if missing_keys := self.required.keys() - v.keys():
-            raise schema_error(node, f'a mapping that has the keys {sorted(self.required)}')
+            raise node.error(f'a mapping that has the keys {sorted(self.required)}')
         unspecified_keys = v.keys() - self.required.keys()
         if self.optional is not None:
             unspecified_keys -= self.optional.keys()
         if unspecified_keys and self.values is None:
             keys = sorted([*self.required, *(self.optional or ())])
-            raise schema_error(node, f'a mapping that only has the keys {keys}')
+            raise node.error(f'a mapping that only has the keys {keys}')
         specified = {key: schema.validate(v[key]) for key, schema in self.required.items()}
         if self.optional is not None:
             specified |= {key: schema.validate(v[key]) for key, schema in self.optional.items() if key in v}
@@ -197,7 +192,7 @@ class CommaSeparated(Schema):
 
     def validate(self, node: Node) -> Any:
         if not isinstance(node, StrNode):
-            raise schema_error(node, 'string')
+            raise node.error('string')
         return [self.item.validate(StrNode(node.location, item)) for item in node.value.split(',')]
 
 @dataclass
