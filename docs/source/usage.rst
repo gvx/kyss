@@ -110,6 +110,7 @@ If you want more control over how data gets interpreted, you can subclass :class
 .. TODO: advanced uses of Mapping
 .. TODO: Alternatives
 .. TODO: wrap_in
+.. TODO: writing your own schemas
 
 Typed schemas
 +++++++++++++
@@ -156,4 +157,35 @@ You can use :class:`typing.TypedDict` to describe more mappings with specified k
     # [{'name': 'Guido van Rossum', 'title': 'former BDFL'},
     #  {'major version': 3, 'minor version': 12, 'name': 'Python'}]
 
-Typed schemas do have some limitations, though. If you want to use :meth:`kyss.Schema.wrap_in`, or use custom :class:`kyss.Schema` subclasses, you'll need to drop back into the regular schema syntax described above.
+If you want to use custom :class:`kyss.Schema` subclasses or  :meth:`kyss.Schema.wrap_in`, you can add them to a :class:`SchemaRegistry`::
+
+    from dataclasses import dataclass
+
+    registry = kyss.SchemaRegistry()
+
+    @dataclass
+    class Tuple(kyss.Schema):
+        item: kyss.Schema
+
+        def validate(self, node: kyss.ast.Node) -> tuple:
+            if not isinstance(node, kyss.ast.ListNode):
+                raise kyss.schema.schema_error(node, 'sequence')
+            return [self.item.validate(item) for item in node.children]
+
+    def make_set_schema(*args):
+        return kyss.Sequence(*args).wrap_in(set)
+
+    registry.register_type(set, make_set_schema)
+
+    example = '''
+    - - 10
+    - - 20
+      - 30
+    - - 40
+      - 50
+    '''
+
+    pprint(registry.parse_string(example, set[tuple[int]]))
+
+    # output:
+    # {(10,), (20, 30), (40, 50)}
