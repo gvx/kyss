@@ -34,18 +34,51 @@ Schemas
 
 .. autoclass:: Decimal
 
-.. autoclass:: Sequence
+.. autoclass:: List
 
-.. autoclass:: Mapping
+.. autoclass:: Dict
 
-.. autoclass:: SequenceOrSingle
+.. autoclass:: ListOrSingle
 
 .. autoclass:: CommaSeparated
 
 .. autoclass:: Accept
 
+Nodes
++++++
+
+.. module:: kyss.ast
+
+   .. autoclass:: Node()
+      :members:
+
+   .. autoclass:: StrNode()
+
+      .. attribute:: kind
+         :annotation: = 'scalar'
+
+      .. autoattribute:: value
+
+   .. autoclass:: ListNode()
+
+      .. attribute:: kind
+         :annotation: = 'sequence'
+
+      .. autoattribute:: children
+
+   .. autoclass:: DictNode()
+
+      .. attribute:: kind
+         :annotation: = 'mapping'
+
+      .. autoattribute:: children
+
+
 Typed schemas
 -------------
+
+.. module:: kyss.typed_schema
+
 
 .. class:: comma_separated[T]
 
@@ -53,7 +86,7 @@ Typed schemas
 
 .. class:: list_or_single[T]
 
-   Type syntax version of :py:class:`SequenceOrSingle`.
+   Type syntax version of :py:class:`ListOrSingle`.
 
 .. autoclass:: SchemaRegistry
    :members:

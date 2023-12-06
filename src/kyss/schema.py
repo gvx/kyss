@@ -72,8 +72,7 @@ class Str(Schema):
     'Accepts any scalar and produces it unchanged.'
 
     def validate(self, node: Node) -> Any:
-        if not isinstance(node, StrNode):
-            raise node.error('string')
+        node.require_scalar()
         return node.value
 
 @dataclass
@@ -81,7 +80,7 @@ class Bool(Schema):
     "Accepts scalars that case-insensitively equal to 'true' or 'false'. Produces a ``bool``."
 
     def validate(self, node: Node) -> Any:
-        if isinstance(node, StrNode):
+        if node.is_scalar():
             v = node.value.lower()
             if v == 'true':
                 return True
@@ -94,7 +93,7 @@ class Int(Schema):
     'Accepts scalars that Python can interpret as integers. Produces an ``int``.'
 
     def validate(self, node: Node) -> Any:
-        if isinstance(node, StrNode):
+        if node.is_scalar():
             try:
                 return int(node.value)
             except ValueError:
@@ -106,7 +105,7 @@ class Float(Schema):
     'Accepts scalars that Python can interpret as floating point numbers. Produces a ``float``.'
 
     def validate(self, node: Node) -> Any:
-        if isinstance(node, StrNode):
+        if node.is_scalar():
             try:
                 return float(node.value)
             except ValueError:
@@ -119,7 +118,7 @@ class Decimal(Schema):
     'Accepts scalars that Python can interpret as a decimal number. Produces a ``decimal.Decimal``.'
 
     def validate(self, node: Node) -> Any:
-        if isinstance(node, StrNode):
+        if node.is_scalar():
             try:
                 return PyDecimal(node.value)
             except InvalidOperation:
@@ -133,8 +132,7 @@ class List(Schema):
     item: Schema
 
     def validate(self, node: Node) -> Any:
-        if not isinstance(node, ListNode):
-            raise node.error('sequence')
+        node.require_sequence()
         return [self.item.validate(item) for item in node.children]
 
 @dataclass
@@ -150,8 +148,7 @@ class Dict(Schema):
     optional: dict[str, Schema] | None = field(default=None, kw_only=True)
 
     def validate(self, node: Node) -> Any:
-        if not isinstance(node, DictNode):
-            raise node.error('mapping')
+        node.require_mapping()
         v = node.children
         if missing_keys := self.required.keys() - v.keys():
             raise node.error(f'a mapping that has the keys {sorted(self.required)}')
@@ -177,7 +174,7 @@ class ListOrSingle(Schema):
     item: Schema
 
     def validate(self, node: Node) -> Any:
-        if isinstance(node, ListNode):
+        if node.is_sequence():
             return [self.item.validate(item) for item in node.children]
         return [self.item.validate(node)]
 
@@ -191,8 +188,7 @@ class CommaSeparated(Schema):
     item: Schema
 
     def validate(self, node: Node) -> Any:
-        if not isinstance(node, StrNode):
-            raise node.error('string')
+        node.require_scalar()
         return [self.item.validate(StrNode(node.location, item)) for item in node.value.split(',')]
 
 @dataclass
@@ -200,10 +196,10 @@ class Accept(Schema):
     '''Accepts any value and produces it unchanged.'''
 
     def validate(self, node: Node) -> Any:
-        if isinstance(node, StrNode):
+        if node.is_scalar():
             return node.value
-        elif isinstance(node, ListNode):
+        elif node.is_sequence():
             return [self.validate(item) for item in node.children]
-        elif isinstance(node, DictNode):
+        elif node.is_mapping():
             return {key: self.validate(value) for key, value in node.children.items()}
         assert False  # unreachable
